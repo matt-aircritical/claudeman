@@ -76,42 +76,38 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
 }
 
 async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
-  // Try the Claude Code rich chat panel first (non-fork only)
-  if (!fork) {
+  const targetDir = fs.existsSync(cwd) ? cwd : undefined;
+
+  // Check if we're already in the right workspace
+  const workspaceFolders = vscode.workspace.workspaceFolders || [];
+  const inCurrentWorkspace = workspaceFolders.some(
+    (wf) => cwd.startsWith(wf.uri.fsPath)
+  );
+
+  if (inCurrentWorkspace && !fork) {
+    // Same workspace — try opening in Claude Code's rich panel directly
     const claudeExt = vscode.extensions.getExtension('anthropic.claude-code');
     if (claudeExt) {
       try {
         if (!claudeExt.isActive) {
           await claudeExt.activate();
         }
-
-        // Ensure the session's workspace folder is in the current VSCode workspace.
-        // Claude Code scopes sessions by workspace — it won't find a session unless
-        // the originating folder is part of the open workspace.
-        const sessionFolder = vscode.Uri.file(cwd);
-        if (fs.existsSync(cwd)) {
-          const workspaceFolders = vscode.workspace.workspaceFolders || [];
-          const alreadyOpen = workspaceFolders.some(
-            (wf) => cwd.startsWith(wf.uri.fsPath)
-          );
-          if (!alreadyOpen) {
-            // Add the session's folder to the workspace so Claude Code can find it
-            vscode.workspace.updateWorkspaceFolders(
-              workspaceFolders.length, 0,
-              { uri: sessionFolder, name: sessionFolder.fsPath.split('/').pop() }
-            );
-            // Give Claude Code a moment to pick up the new workspace folder
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-          }
-        }
-
-        // editor.open(sessionId, initialPrompt?, viewColumn?)
         await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
         return;
       } catch (e) {
-        console.error('ClaudeMan: editor.open failed, falling back to terminal:', e);
+        console.error('ClaudeMan: editor.open failed:', e);
       }
     }
+  }
+
+  if (!inCurrentWorkspace && targetDir) {
+    // Different workspace — reopen VSCode in the session's directory
+    // Claude Code will have the session in its session list there
+    const uri = vscode.Uri.file(targetDir);
+    await vscode.commands.executeCommand('vscode.openFolder', uri, false);
+    // VSCode will reopen in the new folder. After reload, user can find
+    // the session in Claude Code's session picker or use ClaudeMan again.
+    return;
   }
 
   // Fallback: terminal with cd (also used for fork which needs CLI flags)
@@ -122,8 +118,6 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
   const args = ['--resume', sessionId];
   if (fork) args.push('--fork-session');
   args.push(...extraArgs);
-
-  const targetDir = fs.existsSync(cwd) ? cwd : undefined;
 
   const terminal = vscode.window.createTerminal({
     name: `Claude: ${sessionId.slice(0, 8)}`,
