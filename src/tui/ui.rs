@@ -26,6 +26,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_tabs(f, app, chunks[1]);
     draw_main(f, app, chunks[2]);
     draw_status_bar(f, app, chunks[3]);
+
+    // Help overlay
+    if app.show_help {
+        draw_help(f, area);
+    }
 }
 
 fn draw_search_bar(f: &mut Frame, app: &mut App, area: Rect) {
@@ -142,8 +147,9 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
                 let msgs = format!("{}msg", session.message_count);
 
                 let max_name = inner_width.saturating_sub(date.len() + msgs.len() + 4);
-                let name_display = if name.len() > max_name {
-                    format!("{}…", &name[..max_name.saturating_sub(1).max(1)])
+                let name_display = if name.chars().count() > max_name {
+                    let truncated: String = name.chars().take(max_name.saturating_sub(1).max(1)).collect();
+                    format!("{truncated}…")
                 } else {
                     name
                 };
@@ -416,23 +422,147 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(status, area);
 }
 
+fn draw_help(f: &mut Frame, area: Rect) {
+    // Center the help popup
+    let width = 56.min(area.width.saturating_sub(4));
+    let height = 28.min(area.height.saturating_sub(4));
+    let x = (area.width.saturating_sub(width)) / 2;
+    let y = (area.height.saturating_sub(height)) / 2;
+    let popup_area = Rect::new(x, y, width, height);
+
+    // Clear background
+    let clear = Paragraph::new("").style(Style::default().bg(Color::Indexed(233)));
+    f.render_widget(clear, popup_area);
+
+    let help_lines = vec![
+        Line::from(Span::styled(
+            " ClaudeMan — Session Manager ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            " NAVIGATION",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("   ↑ ↓       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Navigate sessions / scroll preview", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   Tab       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Cycle views: All → Project → Date → Search", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   Esc       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Close preview / Clear search / Go back", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            " ACTIONS",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("   Enter     ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("Resume selected session", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   f         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Fork session (resume as new branch)", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   p         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Toggle expanded preview (load from disk)", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   d         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Delete session from index (y to confirm)", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            " EDITING",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("   /         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Search sessions (full-text across all content)", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   n         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Rename selected session", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            " OTHER",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(vec![
+            Span::styled("   r         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Force re-index all sessions", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   h ?       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Show this help", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(vec![
+            Span::styled("   q         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("Quit", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            " Sessions are auto-indexed on startup.",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            " Config: ~/.config/claudeman/config.toml",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "              Press any key to close",
+            Style::default().fg(Color::Cyan),
+        )),
+    ];
+
+    let help = Paragraph::new(help_lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Cyan))
+            .style(Style::default().bg(Color::Indexed(233))),
+    );
+
+    f.render_widget(help, popup_area);
+}
+
 fn shorten_path(path: &str, max_len: usize) -> String {
-    if path.len() <= max_len {
+    let char_count = path.chars().count();
+    if char_count <= max_len {
         return path.to_string();
     }
-    let keep = max_len.saturating_sub(3);
+    let keep = max_len.saturating_sub(1);
     if keep == 0 {
         return "…".to_string();
     }
-    let start = path.len() - keep;
-    format!("…{}", &path[start..])
+    let skip = char_count - keep;
+    let shortened: String = path.chars().skip(skip).collect();
+    format!("…{shortened}")
 }
 
 fn truncate_text(text: &str, max_chars: usize) -> String {
-    if text.len() <= max_chars {
+    if text.chars().count() <= max_chars {
         text.to_string()
     } else {
-        format!("{}…", &text[..max_chars.saturating_sub(1)])
+        let truncated: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+        format!("{truncated}…")
     }
 }
 

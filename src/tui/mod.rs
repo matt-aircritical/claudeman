@@ -66,6 +66,8 @@ pub struct App {
     pub preview_session_id: String, // which session is loaded
     // Delete confirmation
     pub confirm_delete: bool,
+    // Help overlay
+    pub show_help: bool,
 }
 
 impl App {
@@ -97,6 +99,7 @@ impl App {
             preview_exchanges: Vec::new(),
             preview_session_id: String::new(),
             confirm_delete: false,
+            show_help: false,
         };
         app.rebuild_display_items();
         app
@@ -131,6 +134,7 @@ impl App {
             preview_exchanges: Vec::new(),
             preview_session_id: String::new(),
             confirm_delete: false,
+            show_help: false,
         };
         app.run_search();
         app

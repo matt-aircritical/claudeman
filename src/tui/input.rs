@@ -12,6 +12,12 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_normal(app: &mut App, key: KeyEvent) {
+    // Help overlay — any key closes it
+    if app.show_help {
+        app.show_help = false;
+        return;
+    }
+
     // Delete confirmation mode
     if app.confirm_delete {
         match key.code {
@@ -90,6 +96,9 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
                 app.confirm_delete = true;
                 app.status_message = "Delete this session from index? (y/n)".to_string();
             }
+        }
+        KeyCode::Char('h') | KeyCode::Char('?') => {
+            app.show_help = true;
         }
         KeyCode::Char('r') => {
             app.reindex_requested = true;

@@ -91,8 +91,8 @@ pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
     }
 
     let now = Utc::now();
-    let name = if first_user_message.len() > 80 {
-        first_user_message[..80].to_string()
+    let name = if first_user_message.chars().count() > 80 {
+        first_user_message.chars().take(80).collect()
     } else {
         first_user_message.clone()
     };
@@ -170,9 +170,9 @@ fn extract_assistant_text(value: &Value) -> String {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        s[..max].to_string()
+        s.chars().take(max).collect()
     }
 }
