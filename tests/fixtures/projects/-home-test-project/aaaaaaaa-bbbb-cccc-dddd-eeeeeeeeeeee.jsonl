@@ -1,0 +1,5 @@
+{"type":"file-history-snapshot","messageId":"msg1","snapshot":{"messageId":"msg1","trackedFileBackups":{},"timestamp":"2026-03-09T12:11:23.509Z"},"isSnapshotUpdate":false}
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/home/test/project","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","version":"2.1.71","type":"user","message":{"role":"user","content":"help me fix the login bug"},"uuid":"msg1","timestamp":"2026-03-09T12:11:23.508Z"}
+{"type":"assistant","message":{"role":"assistant","content":"I'll take a look at the login code. Let me start by reading the auth module."},"uuid":"msg2","timestamp":"2026-03-09T12:11:30.000Z"}
+{"parentUuid":null,"isSidechain":false,"userType":"external","cwd":"/home/test/project","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","version":"2.1.71","type":"user","message":{"role":"user","content":"check the middleware too"},"uuid":"msg3","timestamp":"2026-03-09T12:15:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":"Found the issue in the auth middleware - the token validation was skipping expired tokens."},"uuid":"msg4","timestamp":"2026-03-09T12:15:10.000Z"}
