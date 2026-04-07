@@ -1,6 +1,6 @@
 use crate::resume::ResumeOptions;
 use crate::search::display_name;
-use crate::tui::{App, InputMode, ViewMode};
+use crate::tui::{App, DisplayItem, InputMode, ViewMode};
 use crossterm::event::{KeyCode, KeyEvent};
 
 pub fn handle_key(app: &mut App, key: KeyEvent) {
@@ -17,14 +17,10 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
             app.should_quit = true;
         }
         KeyCode::Up => {
-            if app.selected > 0 {
-                app.selected -= 1;
-            }
+            move_up(app);
         }
         KeyCode::Down => {
-            if !app.filtered.is_empty() && app.selected < app.filtered.len() - 1 {
-                app.selected += 1;
-            }
+            move_down(app);
         }
         KeyCode::Enter => {
             if let Some(session) = app.selected_session() {
@@ -66,14 +62,49 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
                 ViewMode::ByDate => ViewMode::SearchResults,
                 ViewMode::SearchResults => ViewMode::All,
             };
+            app.rebuild_display_items();
         }
         KeyCode::Esc => {
             app.search_query.clear();
             app.filtered = (0..app.sessions.len()).collect();
-            app.selected = 0;
             app.view_mode = ViewMode::All;
+            app.rebuild_display_items();
         }
         _ => {}
+    }
+}
+
+/// Move selection up, skipping header items.
+fn move_up(app: &mut App) {
+    if app.selected == 0 {
+        return;
+    }
+    let mut next = app.selected - 1;
+    // Skip headers
+    while next > 0 && matches!(app.display_items.get(next), Some(DisplayItem::Header(_))) {
+        next -= 1;
+    }
+    if matches!(app.display_items.get(next), Some(DisplayItem::Session(_))) {
+        app.selected = next;
+    }
+}
+
+/// Move selection down, skipping header items.
+fn move_down(app: &mut App) {
+    if app.display_items.is_empty() {
+        return;
+    }
+    let max = app.display_items.len() - 1;
+    if app.selected >= max {
+        return;
+    }
+    let mut next = app.selected + 1;
+    // Skip headers
+    while next < max && matches!(app.display_items.get(next), Some(DisplayItem::Header(_))) {
+        next += 1;
+    }
+    if matches!(app.display_items.get(next), Some(DisplayItem::Session(_))) {
+        app.selected = next;
     }
 }
 

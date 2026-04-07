@@ -1,7 +1,8 @@
+use crate::indexer::IndexedSession;
 use crate::search::{display_name, format_date, group_by_project};
-use crate::tui::{App, InputMode, ViewMode};
+use crate::tui::{App, DisplayItem, InputMode, ViewMode};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Position},
+    layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, Wrap},
@@ -11,13 +12,12 @@ use ratatui::{
 pub fn draw(f: &mut Frame, app: &mut App) {
     let area = f.area();
 
-    // Outer vertical layout: search bar, tabs, main content, status bar
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // search bar
             Constraint::Length(1), // tabs
-            Constraint::Min(0),    // main content
+            Constraint::Min(0),   // main content
             Constraint::Length(1), // status bar
         ])
         .split(area);
@@ -28,24 +28,38 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     draw_status_bar(f, app, chunks[3]);
 }
 
-fn draw_search_bar(f: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
-    let (title, content) = match app.input_mode {
-        InputMode::Search => ("Search (Enter to confirm, Esc to cancel)", app.search_query.as_str()),
-        InputMode::Rename => ("Rename (Enter to save, Esc to cancel)", app.rename_buffer.as_str()),
-        InputMode::Normal => ("/ to search  n to rename", app.search_query.as_str()),
-    };
-
-    let style = match app.input_mode {
-        InputMode::Normal => Style::default().fg(Color::DarkGray),
-        _ => Style::default().fg(Color::Yellow),
+fn draw_search_bar(f: &mut Frame, app: &mut App, area: Rect) {
+    let (title, content, border_color) = match app.input_mode {
+        InputMode::Search => (
+            " Search (Enter to confirm, Esc to cancel) ",
+            app.search_query.as_str(),
+            Color::Yellow,
+        ),
+        InputMode::Rename => (
+            " Rename (Enter to save, Esc to cancel) ",
+            app.rename_buffer.as_str(),
+            Color::Green,
+        ),
+        InputMode::Normal => {
+            let hint = if app.search_query.is_empty() {
+                " / search  n rename "
+            } else {
+                " Esc to clear search "
+            };
+            (hint, app.search_query.as_str(), Color::DarkGray)
+        }
     };
 
     let input = Paragraph::new(content)
-        .style(style)
-        .block(Block::default().borders(Borders::ALL).title(title));
+        .style(Style::default().fg(Color::White))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title(title),
+        );
     f.render_widget(input, area);
 
-    // Show cursor when typing
     if matches!(app.input_mode, InputMode::Search | InputMode::Rename) {
         let cursor_x = area.x + content.len() as u16 + 1;
         let cursor_y = area.y + 1;
@@ -55,24 +69,19 @@ fn draw_search_bar(f: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
     }
 }
 
-fn draw_tabs(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let total = app.sessions.len();
+fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
+    let session_count = app.session_count();
     let search_count = if app.view_mode == ViewMode::SearchResults {
-        app.filtered.len()
+        session_count
     } else {
-        0
-    };
-
-    let project_count = {
-        let groups = group_by_project(&app.sessions);
-        groups.len()
+        app.filtered.len()
     };
 
     let tab_titles = vec![
-        Line::from(format!("All ({})", total)),
-        Line::from("By Project"),
-        Line::from("By Date"),
-        Line::from(format!("Search ({})", search_count)),
+        Line::from(format!(" All ({}) ", app.sessions.len())),
+        Line::from(" By Project "),
+        Line::from(" By Date "),
+        Line::from(format!(" Search ({}) ", search_count)),
     ];
 
     let selected_tab = match app.view_mode {
@@ -84,147 +93,205 @@ fn draw_tabs(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let tabs = Tabs::new(tab_titles)
         .select(selected_tab)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(Color::DarkGray))
         .highlight_style(
             Style::default()
-                .fg(Color::Yellow)
+                .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )
-        .divider("|");
-
-    // Suppress unused variable warning
-    let _ = project_count;
+        .divider("│");
 
     f.render_widget(tabs, area);
 }
 
-fn draw_main(f: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
-    // Horizontal split: 45% list, 55% preview
+fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
+    // 2/3 session list, 1/3 preview
     let h_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(45), Constraint::Percentage(55)])
+        .constraints([Constraint::Percentage(67), Constraint::Percentage(33)])
         .split(area);
 
     draw_session_list(f, app, h_chunks[0]);
     draw_preview(f, app, h_chunks[1]);
 }
 
-fn draw_session_list(f: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
+fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
+    let inner_width = area.width.saturating_sub(4) as usize; // account for borders + highlight symbol
+
     let items: Vec<ListItem> = app
-        .filtered
+        .display_items
         .iter()
-        .filter_map(|&idx| app.sessions.get(idx))
-        .map(|session| {
-            let name = display_name(session, &app.name_store).to_string();
-            let date = format_date(session.last_activity);
-            // Truncate name to fit
-            let max_name = area.width.saturating_sub(12) as usize;
-            let name_display = if name.len() > max_name {
-                format!("{}…", &name[..max_name.saturating_sub(1)])
-            } else {
-                name
-            };
+        .map(|item| match item {
+            DisplayItem::Header(title) => {
+                // Group header bar — full width, distinct style
+                let bar = "─".repeat(inner_width.saturating_sub(title.len()));
+                ListItem::new(Line::from(vec![
+                    Span::styled(
+                        title.clone(),
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(bar, Style::default().fg(Color::DarkGray)),
+                ]))
+            }
+            DisplayItem::Session(idx) => {
+                let session = &app.sessions[*idx];
+                let name = display_name(session, &app.name_store).to_string();
+                let date = format_date(session.last_activity);
+                let msgs = format!("{}msg", session.message_count);
 
-            let line1 = Line::from(vec![
-                Span::styled(name_display, Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw("  "),
-                Span::styled(date, Style::default().fg(Color::DarkGray)),
-            ]);
+                let max_name = inner_width.saturating_sub(date.len() + msgs.len() + 4);
+                let name_display = if name.len() > max_name {
+                    format!("{}…", &name[..max_name.saturating_sub(1).max(1)])
+                } else {
+                    name
+                };
 
-            let project = if session.project_dir.is_empty() {
-                session.cwd.clone()
-            } else {
-                session.project_dir.clone()
-            };
-            let project_short = shorten_path(&project, area.width.saturating_sub(8) as usize);
-            let msg_info = format!(" {}msg", session.message_count);
+                let line1 = Line::from(vec![
+                    Span::styled(
+                        name_display,
+                        Style::default().fg(Color::White),
+                    ),
+                    Span::raw("  "),
+                    Span::styled(date, Style::default().fg(Color::DarkGray)),
+                    Span::raw("  "),
+                    Span::styled(msgs, Style::default().fg(Color::DarkGray)),
+                ]);
 
-            let line2 = Line::from(vec![
-                Span::styled(project_short, Style::default().fg(Color::Cyan)),
-                Span::styled(msg_info, Style::default().fg(Color::DarkGray)),
-            ]);
+                let project = if session.project_dir.is_empty() {
+                    &session.cwd
+                } else {
+                    &session.project_dir
+                };
+                let project_short = shorten_path(project, inner_width.saturating_sub(2));
 
-            ListItem::new(vec![line1, line2])
+                let line2 = Line::from(vec![
+                    Span::styled(
+                        format!("  {}", project_short),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]);
+
+                ListItem::new(vec![line1, line2])
+            }
         })
         .collect();
 
     let title = match app.view_mode {
-        ViewMode::All => format!("Sessions ({})", app.filtered.len()),
-        ViewMode::ByProject => format!("By Project ({})", app.filtered.len()),
-        ViewMode::ByDate => format!("By Date ({})", app.filtered.len()),
-        ViewMode::SearchResults => format!("Results ({})", app.filtered.len()),
+        ViewMode::All => format!(" Sessions ({}) ", app.session_count()),
+        ViewMode::ByProject => {
+            let sessions_vec: Vec<IndexedSession> = app.filtered.iter().filter_map(|&i| app.sessions.get(i)).cloned().collect();
+            let groups = group_by_project(&sessions_vec);
+            format!(" By Project · {} groups ", groups.len())
+        }
+        ViewMode::ByDate => format!(" By Date ({}) ", app.session_count()),
+        ViewMode::SearchResults => format!(" Search Results ({}) ", app.session_count()),
     };
 
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(title))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                )),
+        )
         .highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(Color::Indexed(236)) // subtle dark gray background
+                .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol("▸ ");
 
     let mut list_state = ListState::default();
-    if !app.filtered.is_empty() {
+    if !app.display_items.is_empty() {
         list_state.select(Some(app.selected));
     }
 
     f.render_stateful_widget(list, area, &mut list_state);
 }
 
-fn draw_preview(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
     let session = app.selected_session();
+    let inner_width = area.width.saturating_sub(3) as usize;
 
     let content = match session {
-        None => Paragraph::new("No session selected")
-            .block(Block::default().borders(Borders::ALL).title("Preview"))
-            .style(Style::default().fg(Color::DarkGray)),
+        None => Paragraph::new(Line::from(Span::styled(
+            "No session selected",
+            Style::default().fg(Color::DarkGray),
+        )))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray))
+                .title(" Preview "),
+        ),
         Some(s) => {
             let name = display_name(s, &app.name_store);
             let started = format_date(s.started_at);
             let last = format_date(s.last_activity);
 
             let mut lines: Vec<Line> = vec![
+                Line::from(Span::styled(
+                    name,
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Line::from(Span::styled(
+                    "─".repeat(inner_width),
+                    Style::default().fg(Color::DarkGray),
+                )),
                 Line::from(vec![
-                    Span::styled("ID:      ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(&s.session_id[..s.session_id.len().min(16)]),
+                    Span::styled("ID  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        &s.session_id[..s.session_id.len().min(8)],
+                        Style::default().fg(Color::DarkGray),
+                    ),
                 ]),
                 Line::from(vec![
-                    Span::styled("Name:    ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(name, Style::default().add_modifier(Modifier::BOLD)),
-                ]),
-                Line::from(vec![
-                    Span::styled("Started: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled("Age ", Style::default().fg(Color::DarkGray)),
                     Span::raw(started),
-                ]),
-                Line::from(vec![
-                    Span::styled("Active:  ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(" → ", Style::default().fg(Color::DarkGray)),
                     Span::raw(last),
                 ]),
                 Line::from(vec![
-                    Span::styled("CWD:     ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(shorten_path(&s.cwd, area.width.saturating_sub(10) as usize), Style::default().fg(Color::Cyan)),
+                    Span::styled("Dir ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        shorten_path(&s.cwd, inner_width.saturating_sub(4)),
+                        Style::default().fg(Color::Cyan),
+                    ),
                 ]),
                 Line::from(vec![
-                    Span::styled("Model:   ", Style::default().fg(Color::DarkGray)),
-                    Span::raw(&s.model),
-                ]),
-                Line::from(vec![
-                    Span::styled("Messages:", Style::default().fg(Color::DarkGray)),
-                    Span::raw(format!(" {}", s.message_count)),
+                    Span::styled("Msg ", Style::default().fg(Color::DarkGray)),
+                    Span::raw(format!("{}", s.message_count)),
+                    if !s.model.is_empty() {
+                        Span::styled(
+                            format!("  {}", s.model),
+                            Style::default().fg(Color::DarkGray),
+                        )
+                    } else {
+                        Span::raw("")
+                    },
                 ]),
                 Line::from(""),
             ];
 
             if !s.first_user_message.is_empty() {
                 lines.push(Line::from(Span::styled(
-                    "First message:",
+                    "YOU",
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(Color::Green)
                         .add_modifier(Modifier::BOLD),
                 )));
-                let msg = truncate_text(&s.first_user_message, 300);
-                for line in wrap_text(&msg, area.width.saturating_sub(4) as usize) {
+                let msg = truncate_text(&s.first_user_message, 200);
+                for line in wrap_text(&msg, inner_width) {
                     lines.push(Line::from(Span::raw(line)));
                 }
                 lines.push(Line::from(""));
@@ -232,19 +299,27 @@ fn draw_preview(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
             if !s.first_assistant_message.is_empty() {
                 lines.push(Line::from(Span::styled(
-                    "First response:",
+                    "CLAUDE",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(Color::Blue)
                         .add_modifier(Modifier::BOLD),
                 )));
-                let msg = truncate_text(&s.first_assistant_message, 200);
-                for line in wrap_text(&msg, area.width.saturating_sub(4) as usize) {
+                let msg = truncate_text(&s.first_assistant_message, 150);
+                for line in wrap_text(&msg, inner_width) {
                     lines.push(Line::from(Span::raw(line)));
                 }
             }
 
             Paragraph::new(lines)
-                .block(Block::default().borders(Borders::ALL).title("Preview"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::DarkGray))
+                        .title(Span::styled(
+                            " Preview ",
+                            Style::default().fg(Color::White),
+                        )),
+                )
                 .wrap(Wrap { trim: false })
         }
     };
@@ -252,35 +327,37 @@ fn draw_preview(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     f.render_widget(content, area);
 }
 
-fn draw_status_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
     let left = if !app.status_message.is_empty() {
-        app.status_message.clone()
+        Span::styled(
+            app.status_message.clone(),
+            Style::default().fg(Color::Green),
+        )
     } else {
         let project_count = group_by_project(&app.sessions).len();
-        format!("{} sessions | {} projects", app.sessions.len(), project_count)
+        Span::styled(
+            format!(" {} sessions · {} projects", app.sessions.len(), project_count),
+            Style::default().fg(Color::Cyan),
+        )
     };
 
-    let right = match app.input_mode {
-        InputMode::Normal => "↑↓ navigate  Enter resume  f fork  / search  n rename  r reindex  Tab views  q quit",
-        InputMode::Search => "Enter confirm  Esc cancel  Type to filter",
-        InputMode::Rename => "Enter save  Esc cancel  Type new name",
+    let right_text = match app.input_mode {
+        InputMode::Normal => "↑↓ nav  ⏎ resume  f fork  / search  n rename  Tab views  q quit ",
+        InputMode::Search => "⏎ confirm  Esc cancel ",
+        InputMode::Rename => "⏎ save  Esc cancel ",
     };
+
+    let right = Span::styled(right_text, Style::default().fg(Color::DarkGray));
 
     let width = area.width as usize;
-    let right_len = right.len();
-    let left_max = width.saturating_sub(right_len + 2);
-    let left_short = if left.len() > left_max {
-        &left[..left_max]
-    } else {
-        &left
-    };
+    let used = left.content.len() + right.content.len();
+    let padding = width.saturating_sub(used);
 
-    let padding = width.saturating_sub(left_short.len() + right_len);
-    let status_text = format!("{}{}{}", left_short, " ".repeat(padding), right);
+    let bar = Line::from(vec![left, Span::raw(" ".repeat(padding)), right]);
 
-    let status = Paragraph::new(status_text).style(
+    let status = Paragraph::new(bar).style(
         Style::default()
-            .bg(Color::DarkGray)
+            .bg(Color::Indexed(235))
             .fg(Color::White),
     );
 
@@ -291,13 +368,12 @@ fn shorten_path(path: &str, max_len: usize) -> String {
     if path.len() <= max_len {
         return path.to_string();
     }
-    // Try to keep the end of the path
     let keep = max_len.saturating_sub(3);
     if keep == 0 {
-        return "...".to_string();
+        return "…".to_string();
     }
     let start = path.len() - keep;
-    format!("...{}", &path[start..])
+    format!("…{}", &path[start..])
 }
 
 fn truncate_text(text: &str, max_chars: usize) -> String {
