@@ -12,15 +12,37 @@ pub fn handle_key(app: &mut App, key: KeyEvent) {
 }
 
 fn handle_normal(app: &mut App, key: KeyEvent) {
+    // Delete confirmation mode
+    if app.confirm_delete {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                app.delete_selected_session();
+            }
+            _ => {
+                app.confirm_delete = false;
+                app.status_message.clear();
+            }
+        }
+        return;
+    }
+
     match key.code {
         KeyCode::Char('q') => {
             app.should_quit = true;
         }
         KeyCode::Up => {
-            move_up(app);
+            if app.expanded_preview {
+                app.preview_scroll = app.preview_scroll.saturating_sub(3);
+            } else {
+                move_up(app);
+            }
         }
         KeyCode::Down => {
-            move_down(app);
+            if app.expanded_preview {
+                app.preview_scroll = app.preview_scroll.saturating_add(3);
+            } else {
+                move_down(app);
+            }
         }
         KeyCode::Enter => {
             if let Some(session) = app.selected_session() {
@@ -51,6 +73,24 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
             app.rename_buffer = current_name;
             app.input_mode = InputMode::Rename;
         }
+        KeyCode::Char('p') => {
+            if app.expanded_preview {
+                // Toggle off
+                app.expanded_preview = false;
+                app.preview_scroll = 0;
+            } else {
+                // Toggle on — load from disk
+                app.load_expanded_preview();
+                app.expanded_preview = true;
+                app.preview_scroll = 0;
+            }
+        }
+        KeyCode::Char('d') => {
+            if app.selected_session().is_some() {
+                app.confirm_delete = true;
+                app.status_message = "Delete this session from index? (y/n)".to_string();
+            }
+        }
         KeyCode::Char('r') => {
             app.reindex_requested = true;
             app.should_quit = true;
@@ -65,10 +105,15 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
             app.rebuild_display_items();
         }
         KeyCode::Esc => {
-            app.search_query.clear();
-            app.filtered = (0..app.sessions.len()).collect();
-            app.view_mode = ViewMode::All;
-            app.rebuild_display_items();
+            if app.expanded_preview {
+                app.expanded_preview = false;
+                app.preview_scroll = 0;
+            } else {
+                app.search_query.clear();
+                app.filtered = (0..app.sessions.len()).collect();
+                app.view_mode = ViewMode::All;
+                app.rebuild_display_items();
+            }
         }
         _ => {}
     }

@@ -5,7 +5,9 @@ pub mod ui;
 use crate::config::Config;
 use crate::indexer::{IndexedSession, SessionIndex};
 use crate::names::NameStore;
+use crate::parser;
 use crate::resume::ResumeOptions;
+use crate::scanner;
 use crate::search;
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyEventKind};
@@ -34,6 +36,13 @@ pub enum DisplayItem {
     Session(usize), // index into app.sessions
 }
 
+/// A loaded exchange from the JSONL file for expanded preview.
+#[derive(Debug, Clone)]
+pub struct Exchange {
+    pub role: String, // "user" or "assistant"
+    pub text: String,
+}
+
 pub struct App {
     pub sessions: Vec<IndexedSession>,
     pub filtered: Vec<usize>,
@@ -50,6 +59,13 @@ pub struct App {
     pub resume_action: Option<ResumeOptions>,
     pub reindex_requested: bool,
     pub status_message: String,
+    // Expanded preview
+    pub expanded_preview: bool,
+    pub preview_scroll: u16,
+    pub preview_exchanges: Vec<Exchange>,
+    pub preview_session_id: String, // which session is loaded
+    // Delete confirmation
+    pub confirm_delete: bool,
 }
 
 impl App {
@@ -76,6 +92,11 @@ impl App {
             resume_action: None,
             reindex_requested: false,
             status_message: String::new(),
+            expanded_preview: false,
+            preview_scroll: 0,
+            preview_exchanges: Vec::new(),
+            preview_session_id: String::new(),
+            confirm_delete: false,
         };
         app.rebuild_display_items();
         app
@@ -105,6 +126,11 @@ impl App {
             resume_action: None,
             reindex_requested: false,
             status_message: String::new(),
+            expanded_preview: false,
+            preview_scroll: 0,
+            preview_exchanges: Vec::new(),
+            preview_session_id: String::new(),
+            confirm_delete: false,
         };
         app.run_search();
         app
@@ -234,6 +260,127 @@ impl App {
             }
             self.selected = 0;
         }
+    }
+
+    /// Load full conversation exchanges from the JSONL file on disk.
+    pub fn load_expanded_preview(&mut self) {
+        let session = match self.selected_session() {
+            Some(s) => s,
+            None => return,
+        };
+
+        // Don't reload if already loaded for this session
+        if self.preview_session_id == session.session_id && !self.preview_exchanges.is_empty() {
+            return;
+        }
+
+        let jsonl_path = session.jsonl_path.clone();
+        let session_id = session.session_id.clone();
+
+        let discovered = scanner::DiscoveredSession {
+            session_id: session_id.clone(),
+            project_dir: session.project_dir.clone(),
+            jsonl_path: jsonl_path.clone(),
+            file_mtime: 0,
+        };
+
+        match parser::parse_session(&discovered) {
+            Ok(parsed) => {
+                let mut exchanges = Vec::new();
+
+                // Re-parse the JSONL to get individual messages
+                if let Ok(file) = std::fs::File::open(&jsonl_path) {
+                    use std::io::{BufRead, BufReader};
+                    let reader = BufReader::new(file);
+                    for line in reader.lines().flatten() {
+                        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+                            let msg_type = value.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            let text = extract_message_text(&value);
+                            if !text.is_empty() {
+                                match msg_type {
+                                    "user" => exchanges.push(Exchange {
+                                        role: "user".to_string(),
+                                        text,
+                                    }),
+                                    "assistant" => exchanges.push(Exchange {
+                                        role: "assistant".to_string(),
+                                        text,
+                                    }),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+
+                self.preview_exchanges = exchanges;
+                self.preview_session_id = session_id;
+                self.preview_scroll = 0;
+            }
+            Err(e) => {
+                self.status_message = format!("Failed to load preview: {e}");
+            }
+        }
+    }
+
+    /// Delete the currently selected session from the index.
+    pub fn delete_selected_session(&mut self) {
+        let session_id = match self.selected_session() {
+            Some(s) => s.session_id.clone(),
+            None => return,
+        };
+
+        if let Err(e) = self.index.remove_session(&session_id) {
+            self.status_message = format!("Delete failed: {e}");
+            return;
+        }
+        if let Err(e) = self.index.commit() {
+            self.status_message = format!("Commit failed: {e}");
+            return;
+        }
+
+        // Remove from sessions list
+        self.sessions.retain(|s| s.session_id != session_id);
+        self.filtered.retain(|&i| i < self.sessions.len());
+        // Rebuild filtered to be valid indices
+        self.filtered = (0..self.sessions.len()).collect();
+        if self.view_mode == ViewMode::SearchResults && !self.search_query.is_empty() {
+            self.run_search();
+        } else {
+            self.rebuild_display_items();
+        }
+
+        // Reset preview
+        self.expanded_preview = false;
+        self.preview_exchanges.clear();
+        self.preview_session_id.clear();
+
+        self.status_message = format!("Session {} deleted from index", &session_id[..8]);
+        self.confirm_delete = false;
+    }
+}
+
+fn extract_message_text(value: &serde_json::Value) -> String {
+    let content = match value.get("message").and_then(|m| m.get("content")) {
+        Some(c) => c,
+        None => return String::new(),
+    };
+    match content {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .filter_map(|item| {
+                if item.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    item.get("text").and_then(|t| t.as_str()).map(String::from)
+                } else if item.is_string() {
+                    item.as_str().map(String::from)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" "),
+        _ => String::new(),
     }
 }
 

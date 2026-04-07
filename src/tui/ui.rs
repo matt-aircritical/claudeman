@@ -283,44 +283,90 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
                 Line::from(""),
             ];
 
-            if !s.first_user_message.is_empty() {
+            // Expanded mode: show all exchanges from disk
+            if app.expanded_preview
+                && !app.preview_exchanges.is_empty()
+                && app.preview_session_id == s.session_id
+            {
                 lines.push(Line::from(Span::styled(
-                    "YOU",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
+                    format!("─── Full Conversation ({} exchanges) ───", app.preview_exchanges.len()),
+                    Style::default().fg(Color::Yellow),
                 )));
-                let msg = truncate_text(&s.first_user_message, 200);
-                for line in wrap_text(&msg, inner_width) {
-                    lines.push(Line::from(Span::raw(line)));
-                }
                 lines.push(Line::from(""));
+
+                for (i, exchange) in app.preview_exchanges.iter().enumerate() {
+                    let (label, color) = if exchange.role == "user" {
+                        (format!("YOU [{}]", i + 1), Color::Green)
+                    } else {
+                        (format!("CLAUDE [{}]", i + 1), Color::Blue)
+                    };
+
+                    lines.push(Line::from(Span::styled(
+                        label,
+                        Style::default().fg(color).add_modifier(Modifier::BOLD),
+                    )));
+
+                    let text = truncate_text(&exchange.text, 500);
+                    for line in wrap_text(&text, inner_width) {
+                        lines.push(Line::from(Span::raw(line)));
+                    }
+                    lines.push(Line::from(""));
+                }
+            } else {
+                // Compact mode: just first exchange
+                if !s.first_user_message.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        "YOU",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    )));
+                    let msg = truncate_text(&s.first_user_message, 200);
+                    for line in wrap_text(&msg, inner_width) {
+                        lines.push(Line::from(Span::raw(line)));
+                    }
+                    lines.push(Line::from(""));
+                }
+
+                if !s.first_assistant_message.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        "CLAUDE",
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    )));
+                    let msg = truncate_text(&s.first_assistant_message, 150);
+                    for line in wrap_text(&msg, inner_width) {
+                        lines.push(Line::from(Span::raw(line)));
+                    }
+                }
+
+                lines.push(Line::from(""));
+                lines.push(Line::from(Span::styled(
+                    "press p for full conversation",
+                    Style::default().fg(Color::DarkGray),
+                )));
             }
 
-            if !s.first_assistant_message.is_empty() {
-                lines.push(Line::from(Span::styled(
-                    "CLAUDE",
-                    Style::default()
-                        .fg(Color::Blue)
-                        .add_modifier(Modifier::BOLD),
-                )));
-                let msg = truncate_text(&s.first_assistant_message, 150);
-                for line in wrap_text(&msg, inner_width) {
-                    lines.push(Line::from(Span::raw(line)));
-                }
-            }
+            let title = if app.expanded_preview {
+                " Preview (expanded · ↑↓ scroll · Esc close) "
+            } else {
+                " Preview "
+            };
 
             Paragraph::new(lines)
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::DarkGray))
-                        .title(Span::styled(
-                            " Preview ",
-                            Style::default().fg(Color::White),
-                        )),
+                        .border_style(Style::default().fg(if app.expanded_preview {
+                            Color::Yellow
+                        } else {
+                            Color::DarkGray
+                        }))
+                        .title(Span::styled(title, Style::default().fg(Color::White))),
                 )
                 .wrap(Wrap { trim: false })
+                .scroll((app.preview_scroll, 0))
         }
     };
 
@@ -341,10 +387,16 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
         )
     };
 
-    let right_text = match app.input_mode {
-        InputMode::Normal => "↑↓ nav  ⏎ resume  f fork  / search  n rename  Tab views  q quit ",
-        InputMode::Search => "⏎ confirm  Esc cancel ",
-        InputMode::Rename => "⏎ save  Esc cancel ",
+    let right_text = if app.confirm_delete {
+        "y delete  n cancel "
+    } else if app.expanded_preview {
+        "↑↓ scroll  Esc close  p toggle "
+    } else {
+        match app.input_mode {
+            InputMode::Normal => "↑↓ nav  ⏎ resume  f fork  p preview  d delete  / search  n name  q quit ",
+            InputMode::Search => "⏎ confirm  Esc cancel ",
+            InputMode::Rename => "⏎ save  Esc cancel ",
+        }
     };
 
     let right = Span::styled(right_text, Style::default().fg(Color::DarkGray));
