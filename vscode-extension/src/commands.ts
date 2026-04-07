@@ -76,6 +76,24 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
 }
 
 async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
+  // Try the Claude Code rich chat panel first (non-fork only)
+  if (!fork) {
+    const claudeExt = vscode.extensions.getExtension('anthropic.claude-code');
+    if (claudeExt) {
+      try {
+        if (!claudeExt.isActive) {
+          await claudeExt.activate();
+        }
+        // editor.open(sessionId, initialPrompt?, viewColumn?)
+        await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
+        return;
+      } catch (e) {
+        console.error('ClaudeMan: editor.open failed, falling back to terminal:', e);
+      }
+    }
+  }
+
+  // Fallback: terminal with cd (also used for fork which needs CLI flags)
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';
   const extraArgs = config.get<string[]>('claudeArgs') || [];
@@ -84,9 +102,6 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
   if (fork) args.push('--fork-session');
   args.push(...extraArgs);
 
-  // Claude --resume is directory-scoped: it only finds sessions created
-  // from the matching directory. We explicitly cd first because VSCode's
-  // terminal cwd option doesn't always take effect before sendText runs.
   const targetDir = fs.existsSync(cwd) ? cwd : undefined;
 
   const terminal = vscode.window.createTerminal({
@@ -94,9 +109,6 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
     cwd: targetDir,
   });
   terminal.show();
-
-  // Must cd to the session's original directory first — claude --resume
-  // only finds sessions created from the matching directory
   if (targetDir) {
     terminal.sendText(`cd ${targetDir} && ${claudeCmd} ${args.join(' ')}`);
   } else {
