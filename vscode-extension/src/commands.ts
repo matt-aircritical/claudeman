@@ -85,13 +85,21 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
   args.push(...extraArgs);
 
   // Claude --resume is directory-scoped: it only finds sessions created
-  // from the matching directory. We must cd to the session's original cwd.
-  const terminalCwd = fs.existsSync(cwd) ? cwd : undefined;
+  // from the matching directory. We explicitly cd first because VSCode's
+  // terminal cwd option doesn't always take effect before sendText runs.
+  const targetDir = fs.existsSync(cwd) ? cwd : undefined;
 
   const terminal = vscode.window.createTerminal({
     name: `Claude: ${sessionId.slice(0, 8)}`,
-    cwd: terminalCwd,
+    cwd: targetDir,
   });
   terminal.show();
-  terminal.sendText(`${claudeCmd} ${args.join(' ')}`);
+
+  // Must cd to the session's original directory first — claude --resume
+  // only finds sessions created from the matching directory
+  if (targetDir) {
+    terminal.sendText(`cd ${targetDir} && ${claudeCmd} ${args.join(' ')}`);
+  } else {
+    terminal.sendText(`${claudeCmd} ${args.join(' ')}`);
+  }
 }
