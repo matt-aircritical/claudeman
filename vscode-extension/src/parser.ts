@@ -5,6 +5,7 @@ export function parseSessionMetadata(discovered: DiscoveredSession): Session {
   const lines = readLines(discovered.jsonlPath);
 
   let cwd = discovered.projectDir;
+  let cwdSet = false;
   let startedAt = 0;
   let lastActivity = 0;
   let model = '';
@@ -26,7 +27,7 @@ export function parseSessionMetadata(discovered: DiscoveredSession): Session {
         if (!startedAt) startedAt = ts;
         lastActivity = ts;
       }
-      if (data.cwd && cwd === discovered.projectDir) cwd = data.cwd;
+      if (data.cwd && !cwdSet) { cwd = data.cwd; cwdSet = true; }
       if (!version && data.version) version = data.version;
       if (!entrypoint && data.entrypoint) entrypoint = data.entrypoint;
       const text = extractMessageText(data);

@@ -11,6 +11,7 @@ pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
     let reader = BufReader::new(file);
 
     let mut cwd = discovered.project_dir.clone();
+    let mut cwd_set = false;
     let mut started_at: Option<DateTime<Utc>> = None;
     let mut last_activity: Option<DateTime<Utc>> = None;
     let mut model = String::new();
@@ -46,8 +47,9 @@ pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
                 }
 
                 if let Some(c) = value.get("cwd").and_then(|c| c.as_str()) {
-                    if cwd == discovered.project_dir {
+                    if !cwd_set {
                         cwd = c.to_string();
+                        cwd_set = true;
                     }
                 }
 
