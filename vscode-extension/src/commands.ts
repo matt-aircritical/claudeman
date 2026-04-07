@@ -76,25 +76,6 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
 }
 
 async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
-  // Try to open in the Claude Code VSCode extension's rich chat panel
-  const claudeExtension = vscode.extensions.getExtension('anthropic.claude-code');
-  if (claudeExtension && !fork) {
-    try {
-      // Ensure the extension is activated
-      if (!claudeExtension.isActive) {
-        await claudeExtension.activate();
-      }
-      // claude-vscode.editor.open(sessionId, initialPrompt?, viewColumn?)
-      // Opens the rich Claude Code chat panel for the given session
-      await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
-      return;
-    } catch (e) {
-      console.error('ClaudeMan: Failed to open in Claude Code extension:', e);
-      // Fall through to terminal
-    }
-  }
-
-  // Fallback: terminal (also used for fork which needs --fork-session CLI flag)
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';
   const extraArgs = config.get<string[]>('claudeArgs') || [];
@@ -103,6 +84,8 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
   if (fork) args.push('--fork-session');
   args.push(...extraArgs);
 
+  // Claude --resume is directory-scoped: it only finds sessions created
+  // from the matching directory. We must cd to the session's original cwd.
   const terminalCwd = fs.existsSync(cwd) ? cwd : undefined;
 
   const terminal = vscode.window.createTerminal({
