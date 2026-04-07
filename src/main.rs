@@ -1,3 +1,6 @@
+mod config;
+mod parser;
+mod scanner;
 mod session;
 
 fn main() {
