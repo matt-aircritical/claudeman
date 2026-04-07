@@ -84,6 +84,27 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
         if (!claudeExt.isActive) {
           await claudeExt.activate();
         }
+
+        // Ensure the session's workspace folder is in the current VSCode workspace.
+        // Claude Code scopes sessions by workspace — it won't find a session unless
+        // the originating folder is part of the open workspace.
+        const sessionFolder = vscode.Uri.file(cwd);
+        if (fs.existsSync(cwd)) {
+          const workspaceFolders = vscode.workspace.workspaceFolders || [];
+          const alreadyOpen = workspaceFolders.some(
+            (wf) => cwd.startsWith(wf.uri.fsPath)
+          );
+          if (!alreadyOpen) {
+            // Add the session's folder to the workspace so Claude Code can find it
+            vscode.workspace.updateWorkspaceFolders(
+              workspaceFolders.length, 0,
+              { uri: sessionFolder, name: sessionFolder.fsPath.split('/').pop() }
+            );
+            // Give Claude Code a moment to pick up the new workspace folder
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+
         // editor.open(sessionId, initialPrompt?, viewColumn?)
         await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
         return;
