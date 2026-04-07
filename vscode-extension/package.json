@@ -23,7 +23,8 @@
       }]
     },
     "commands": [
-      { "command": "claudeman.resumeSession", "title": "Resume Session", "category": "ClaudeMan" },
+      { "command": "claudeman.resumeSession", "title": "Resume in Terminal", "category": "ClaudeMan", "icon": "$(terminal)" },
+      { "command": "claudeman.resumeInWindow", "title": "Resume in New Window", "category": "ClaudeMan", "icon": "$(window)" },
       { "command": "claudeman.forkSession", "title": "Fork Session", "category": "ClaudeMan" },
       { "command": "claudeman.renameSession", "title": "Rename Session", "category": "ClaudeMan" },
       { "command": "claudeman.previewSession", "title": "Preview Conversation", "category": "ClaudeMan" },
@@ -43,7 +44,8 @@
       ],
       "view/item/context": [
         { "command": "claudeman.resumeSession", "when": "viewItem == session", "group": "1_actions@1" },
-        { "command": "claudeman.forkSession", "when": "viewItem == session", "group": "1_actions@2" },
+        { "command": "claudeman.resumeInWindow", "when": "viewItem == session", "group": "1_actions@2" },
+        { "command": "claudeman.forkSession", "when": "viewItem == session", "group": "1_actions@3" },
         { "command": "claudeman.previewSession", "when": "viewItem == session", "group": "2_view@1" },
         { "command": "claudeman.renameSession", "when": "viewItem == session", "group": "2_view@2" },
         { "command": "claudeman.copySessionId", "when": "viewItem == session", "group": "3_other@1" },

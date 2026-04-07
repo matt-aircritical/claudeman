@@ -14,12 +14,18 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('claudeman.resumeSession', (item?: SessionItem | { session: { sessionId: string; cwd: string } }) => {
       const session = resolveSession(item);
-      if (session) launchClaude(session.sessionId, session.cwd, false);
+      if (session) resumeInTerminal(session.sessionId, session.cwd, false);
+    }),
+
+    vscode.commands.registerCommand('claudeman.resumeInWindow', async (item?: SessionItem) => {
+      const session = item?.session;
+      if (!session) { return; }
+      await resumeInNewWindow(session.sessionId, session.cwd);
     }),
 
     vscode.commands.registerCommand('claudeman.forkSession', (item?: SessionItem | { session: { sessionId: string; cwd: string } }) => {
       const session = resolveSession(item);
-      if (session) launchClaude(session.sessionId, session.cwd, true);
+      if (session) resumeInTerminal(session.sessionId, session.cwd, true);
     }),
 
     vscode.commands.registerCommand('claudeman.renameSession', async (item?: SessionItem) => {
@@ -75,42 +81,29 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
   return undefined;
 }
 
-async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
+/**
+ * Resume in a new VSCode window opened in the session's directory.
+ * Claude Code's session list will have the session available there.
+ */
+async function resumeInNewWindow(sessionId: string, cwd: string): Promise<void> {
   const targetDir = fs.existsSync(cwd) ? cwd : undefined;
-
-  // Check if we're already in the right workspace
-  const workspaceFolders = vscode.workspace.workspaceFolders || [];
-  const inCurrentWorkspace = workspaceFolders.some(
-    (wf) => cwd.startsWith(wf.uri.fsPath)
-  );
-
-  if (inCurrentWorkspace && !fork) {
-    // Same workspace — try opening in Claude Code's rich panel directly
-    const claudeExt = vscode.extensions.getExtension('anthropic.claude-code');
-    if (claudeExt) {
-      try {
-        if (!claudeExt.isActive) {
-          await claudeExt.activate();
-        }
-        await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
-        return;
-      } catch (e) {
-        console.error('ClaudeMan: editor.open failed:', e);
-      }
-    }
-  }
-
-  if (!inCurrentWorkspace && targetDir) {
-    // Different workspace — reopen VSCode in the session's directory
-    // Claude Code will have the session in its session list there
-    const uri = vscode.Uri.file(targetDir);
-    await vscode.commands.executeCommand('vscode.openFolder', uri, false);
-    // VSCode will reopen in the new folder. After reload, user can find
-    // the session in Claude Code's session picker or use ClaudeMan again.
+  if (!targetDir) {
+    vscode.window.showErrorMessage(`Session directory not found: ${cwd}`);
     return;
   }
 
-  // Fallback: terminal with cd (also used for fork which needs CLI flags)
+  const uri = vscode.Uri.file(targetDir);
+  // Open in a new window (forceNewWindow = true)
+  await vscode.commands.executeCommand('vscode.openFolder', uri, true);
+  vscode.window.showInformationMessage(
+    `Opening ${targetDir} — find session ${sessionId.slice(0, 8)} in Claude Code's session list`
+  );
+}
+
+/**
+ * Resume in the integrated terminal with cd to the session's directory.
+ */
+function resumeInTerminal(sessionId: string, cwd: string, fork: boolean): void {
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';
   const extraArgs = config.get<string[]>('claudeArgs') || [];
@@ -118,6 +111,8 @@ async function launchClaude(sessionId: string, cwd: string, fork: boolean): Prom
   const args = ['--resume', sessionId];
   if (fork) args.push('--fork-session');
   args.push(...extraArgs);
+
+  const targetDir = fs.existsSync(cwd) ? cwd : undefined;
 
   const terminal = vscode.window.createTerminal({
     name: `Claude: ${sessionId.slice(0, 8)}`,
