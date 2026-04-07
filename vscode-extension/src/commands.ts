@@ -76,28 +76,25 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
 }
 
 async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
-  // Try to use the Claude Code VSCode extension's terminal command
+  // Try to open in the Claude Code VSCode extension's rich chat panel
   const claudeExtension = vscode.extensions.getExtension('anthropic.claude-code');
-  if (claudeExtension) {
+  if (claudeExtension && !fork) {
     try {
-      // claude-vscode.terminal.open accepts (command?: string, args?: string[], options?)
-      // Passing --resume with session ID opens the session in the Claude Code panel
-      const args = ['--resume', sessionId];
-      if (fork) {
-        args.push('--fork-session');
+      // Ensure the extension is activated
+      if (!claudeExtension.isActive) {
+        await claudeExtension.activate();
       }
-      const config = vscode.workspace.getConfiguration('claudeman');
-      const extraArgs = config.get<string[]>('claudeArgs') || [];
-      args.push(...extraArgs);
-
-      await vscode.commands.executeCommand('claude-vscode.terminal.open', undefined, args);
+      // claude-vscode.editor.open(sessionId, initialPrompt?, viewColumn?)
+      // Opens the rich Claude Code chat panel for the given session
+      await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
       return;
-    } catch {
-      // Fall through to manual terminal if the command fails
+    } catch (e) {
+      console.error('ClaudeMan: Failed to open in Claude Code extension:', e);
+      // Fall through to terminal
     }
   }
 
-  // Fallback: open in integrated terminal manually
+  // Fallback: terminal (also used for fork which needs --fork-session CLI flag)
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';
   const extraArgs = config.get<string[]>('claudeArgs') || [];
