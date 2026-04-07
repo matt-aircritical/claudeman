@@ -75,7 +75,19 @@ function resolveSession(item: any): { sessionId: string; cwd: string } | undefin
   return undefined;
 }
 
-function launchClaude(sessionId: string, cwd: string, fork: boolean): void {
+async function launchClaude(sessionId: string, cwd: string, fork: boolean): Promise<void> {
+  // Try to open in the Claude Code VSCode extension first
+  const claudeExtension = vscode.extensions.getExtension('anthropic.claude-code');
+  if (claudeExtension && !fork) {
+    try {
+      await vscode.commands.executeCommand('claude-vscode.editor.open', sessionId);
+      return;
+    } catch {
+      // Fall through to terminal if the command fails
+    }
+  }
+
+  // Fallback: open in integrated terminal (also used for fork, which needs CLI flags)
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';
   const extraArgs = config.get<string[]>('claudeArgs') || [];
