@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Tabs, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs, Wrap},
     Frame,
 };
 
@@ -430,9 +430,8 @@ fn draw_help(f: &mut Frame, area: Rect) {
     let y = (area.height.saturating_sub(height)) / 2;
     let popup_area = Rect::new(x, y, width, height);
 
-    // Clear background
-    let clear = Paragraph::new("").style(Style::default().bg(Color::Indexed(233)));
-    f.render_widget(clear, popup_area);
+    // Clear the area underneath the popup
+    f.render_widget(Clear, popup_area);
 
     let help_lines = vec![
         Line::from(Span::styled(
