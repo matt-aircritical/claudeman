@@ -2,6 +2,7 @@ mod config;
 mod indexer;
 mod names;
 mod parser;
+mod resume;
 mod scanner;
 mod session;
 
