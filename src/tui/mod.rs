@@ -334,6 +334,8 @@ impl App {
             None => return,
         };
 
+        let saved_position = self.selected;
+
         if let Err(e) = self.index.remove_session(&session_id) {
             self.status_message = format!("Delete failed: {e}");
             return;
@@ -352,6 +354,12 @@ impl App {
             self.run_search();
         } else {
             self.rebuild_display_items();
+        }
+
+        // Restore position (clamp to valid range, skip headers)
+        self.selected = saved_position.min(self.display_items.len().saturating_sub(1));
+        if matches!(self.display_items.get(self.selected), Some(DisplayItem::Header(_))) {
+            self.skip_to_next_session();
         }
 
         // Reset preview
