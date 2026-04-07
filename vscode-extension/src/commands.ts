@@ -92,11 +92,16 @@ async function resumeInNewWindow(sessionId: string, cwd: string): Promise<void> 
     return;
   }
 
-  const uri = vscode.Uri.file(targetDir);
-  // Open in a new window (forceNewWindow = true)
-  await vscode.commands.executeCommand('vscode.openFolder', uri, true);
+  // Use execFile (not exec) to safely open a new VSCode window
+  const { execFile } = require('child_process');
+  execFile('code', ['--new-window', targetDir], (err: any) => {
+    if (err) {
+      vscode.window.showErrorMessage(`Failed to open new window: ${err.message}`);
+    }
+  });
+
   vscode.window.showInformationMessage(
-    `Opening ${targetDir} — find session ${sessionId.slice(0, 8)} in Claude Code's session list`
+    `Opened ${targetDir} — find session ${sessionId.slice(0, 8)} in Claude Code's session list`
   );
 }
 
