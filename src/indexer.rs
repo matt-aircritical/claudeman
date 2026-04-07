@@ -35,6 +35,7 @@ pub struct SessionIndex {
 
 impl SessionIndex {
     pub fn create(path: &Path) -> Result<Self> {
+        std::fs::create_dir_all(path)?;
         let schema = build_schema();
         let index = match Index::create_in_dir(path, schema.clone()) {
             Ok(idx) => idx,

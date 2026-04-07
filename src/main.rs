@@ -36,8 +36,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         None => {
-            run_index(&config)?;
-            let idx = indexer::SessionIndex::open(&config::Config::index_dir())?;
+            let idx = run_index(&config)?;
             let name_store = names::NameStore::load()?;
             let sessions = idx.all_sessions()?;
             if sessions.is_empty() {
@@ -50,8 +49,7 @@ fn main() -> Result<()> {
             }
         }
         Some(Commands::Search { query }) => {
-            run_index(&config)?;
-            let idx = indexer::SessionIndex::open(&config::Config::index_dir())?;
+            let idx = run_index(&config)?;
             let name_store = names::NameStore::load()?;
             let sessions = idx.all_sessions()?;
             let app = tui::App::new_with_search(sessions, name_store, config.clone(), idx, query);
@@ -60,8 +58,7 @@ fn main() -> Result<()> {
             }
         }
         Some(Commands::List) => {
-            run_index(&config)?;
-            let idx = indexer::SessionIndex::open(&config::Config::index_dir())?;
+            let idx = run_index(&config)?;
             let name_store = names::NameStore::load()?;
             let sessions = idx.all_sessions()?;
             for session in &sessions {
@@ -85,7 +82,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_index(config: &config::Config) -> Result<()> {
+fn run_index(config: &config::Config) -> Result<indexer::SessionIndex> {
     let index_dir = config::Config::index_dir();
     let idx = indexer::SessionIndex::create(&index_dir)?;
     let discovered = scanner::discover_sessions(&config.claude_dir());
@@ -102,7 +99,7 @@ fn run_index(config: &config::Config) -> Result<()> {
         idx.commit()?;
         eprintln!("Indexed {} new/updated sessions", indexed);
     }
-    Ok(())
+    Ok(idx)
 }
 
 fn run_full_index(config: &config::Config) -> Result<()> {
