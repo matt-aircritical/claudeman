@@ -424,8 +424,8 @@ fn draw_status_bar(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_help(f: &mut Frame, area: Rect) {
     // Center the help popup
-    let width = 56.min(area.width.saturating_sub(4));
-    let height = 28.min(area.height.saturating_sub(4));
+    let width = 68.min(area.width.saturating_sub(4));
+    let height = 30.min(area.height.saturating_sub(4));
     let x = (area.width.saturating_sub(width)) / 2;
     let y = (area.height.saturating_sub(height)) / 2;
     let popup_area = Rect::new(x, y, width, height);
@@ -448,15 +448,15 @@ fn draw_help(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("   ↑ ↓       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   ↑ ↓          ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Navigate sessions / scroll preview", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   Tab       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   Tab          ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Cycle views: All → Project → Date → Search", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   Esc       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   Esc          ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Close preview / Clear search / Go back", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
@@ -467,19 +467,19 @@ fn draw_help(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("   Enter     ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled("   Enter        ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
             Span::styled("Resume selected session", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   f         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   f            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Fork session (resume as new branch)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   p         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   p            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Toggle expanded preview (load from disk)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   d         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   d            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Delete session from index (y to confirm)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
@@ -490,11 +490,11 @@ fn draw_help(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("   /         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   /            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Search sessions (full-text across all content)", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   n         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   n            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Rename selected session", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
@@ -505,15 +505,15 @@ fn draw_help(f: &mut Frame, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(vec![
-            Span::styled("   r         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   r            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Force re-index all sessions", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   h ?       ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   h  ?         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Show this help", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(vec![
-            Span::styled("   q         ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("   q            ", Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
             Span::styled("Quit", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
