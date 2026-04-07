@@ -1,5 +1,6 @@
 mod config;
 mod indexer;
+mod names;
 mod parser;
 mod scanner;
 mod session;
