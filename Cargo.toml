@@ -3,6 +3,10 @@ name = "claudeman"
 version = "0.1.0"
 edition = "2021"
 description = "Claude Code session manager"
+authors = ["Matt"]
+license = "MIT"
+keywords = ["claude", "session", "manager", "tui"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 tantivy = "0.26"
