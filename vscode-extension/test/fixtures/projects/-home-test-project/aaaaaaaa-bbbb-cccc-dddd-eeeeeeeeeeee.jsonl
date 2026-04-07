@@ -1,0 +1,4 @@
+{"type":"user","message":{"role":"user","content":"help me fix the login bug"},"cwd":"/home/test/project","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","version":"2.1.71","timestamp":"2026-03-09T12:11:23.508Z","entrypoint":"cli"}
+{"type":"assistant","message":{"role":"assistant","content":"I'll take a look at the login code. Let me start by reading the auth module."},"timestamp":"2026-03-09T12:11:30.000Z","model":"claude-opus-4-6"}
+{"type":"user","message":{"role":"user","content":"check the middleware too"},"cwd":"/home/test/project","sessionId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","version":"2.1.71","timestamp":"2026-03-09T12:15:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":"Found the issue in the auth middleware."},"timestamp":"2026-03-09T12:15:10.000Z"}
