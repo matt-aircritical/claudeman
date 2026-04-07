@@ -1,0 +1,82 @@
+{
+  "name": "claudeman",
+  "displayName": "ClaudeMan",
+  "description": "Browse, search, and resume Claude Code sessions",
+  "version": "0.1.0",
+  "publisher": "claudeman",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "claudeman",
+        "title": "ClaudeMan",
+        "icon": "media/icon.svg"
+      }]
+    },
+    "views": {
+      "claudeman": [{
+        "id": "claudeman.sessions",
+        "name": "Sessions"
+      }]
+    },
+    "commands": [
+      { "command": "claudeman.resumeSession", "title": "Resume Session", "category": "ClaudeMan" },
+      { "command": "claudeman.forkSession", "title": "Fork Session", "category": "ClaudeMan" },
+      { "command": "claudeman.renameSession", "title": "Rename Session", "category": "ClaudeMan" },
+      { "command": "claudeman.previewSession", "title": "Preview Conversation", "category": "ClaudeMan" },
+      { "command": "claudeman.copySessionId", "title": "Copy Session ID", "category": "ClaudeMan" },
+      { "command": "claudeman.deleteSession", "title": "Delete from Index", "category": "ClaudeMan" },
+      { "command": "claudeman.refreshSessions", "title": "Refresh Sessions", "category": "ClaudeMan", "icon": "$(refresh)" },
+      { "command": "claudeman.viewAll", "title": "View: All Sessions", "category": "ClaudeMan", "icon": "$(list-flat)" },
+      { "command": "claudeman.viewByProject", "title": "View: By Project", "category": "ClaudeMan", "icon": "$(folder)" },
+      { "command": "claudeman.viewRecent", "title": "View: Recent", "category": "ClaudeMan", "icon": "$(history)" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "claudeman.viewAll", "when": "view == claudeman.sessions", "group": "navigation@1" },
+        { "command": "claudeman.viewByProject", "when": "view == claudeman.sessions", "group": "navigation@2" },
+        { "command": "claudeman.viewRecent", "when": "view == claudeman.sessions", "group": "navigation@3" },
+        { "command": "claudeman.refreshSessions", "when": "view == claudeman.sessions", "group": "navigation@4" }
+      ],
+      "view/item/context": [
+        { "command": "claudeman.resumeSession", "when": "viewItem == session", "group": "1_actions@1" },
+        { "command": "claudeman.forkSession", "when": "viewItem == session", "group": "1_actions@2" },
+        { "command": "claudeman.previewSession", "when": "viewItem == session", "group": "2_view@1" },
+        { "command": "claudeman.renameSession", "when": "viewItem == session", "group": "2_view@2" },
+        { "command": "claudeman.copySessionId", "when": "viewItem == session", "group": "3_other@1" },
+        { "command": "claudeman.deleteSession", "when": "viewItem == session", "group": "3_other@2" }
+      ]
+    },
+    "configuration": {
+      "title": "ClaudeMan",
+      "properties": {
+        "claudeman.claudeCommand": { "type": "string", "default": "claude", "description": "Path to the claude binary" },
+        "claudeman.claudeArgs": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Extra arguments appended when resuming sessions" },
+        "claudeman.sessionDirectory": { "type": "string", "default": "", "description": "Path to .claude directory (auto-detected if empty)" },
+        "claudeman.defaultView": { "type": "string", "enum": ["all", "projects", "recent"], "default": "all", "description": "Default view mode on startup" },
+        "claudeman.previewOnClick": { "type": "boolean", "default": true, "description": "Auto-open preview when clicking a session" }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "test": "node --import tsx --test test/*.test.ts",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.0.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "smol-toml": "^1.3.0"
+  }
+}
