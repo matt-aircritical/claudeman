@@ -4,6 +4,7 @@ mod names;
 mod parser;
 mod resume;
 mod scanner;
+mod search;
 mod session;
 
 fn main() {
