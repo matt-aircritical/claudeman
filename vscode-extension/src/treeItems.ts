@@ -10,8 +10,9 @@ export class SessionItem extends vscode.TreeItem {
     super(displayName, vscode.TreeItemCollapsibleState.None);
 
     const project = projectShortName(session.projectDir);
-    const date = formatDate(session.lastActivity);
-    this.description = `${project} \u00b7 ${date} \u00b7 ${session.messageCount} msgs`;
+    const created = formatDate(session.startedAt);
+    const updated = formatDate(session.lastActivity);
+    this.description = `${project} \u00b7 created: ${created} \u00b7 updated: ${updated} \u00b7 ${session.messageCount} msgs`;
 
     this.tooltip = new vscode.MarkdownString(
       `**${displayName}**\n\n` +

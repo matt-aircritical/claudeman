@@ -61,15 +61,15 @@ export function parseSessionMetadata(discovered: DiscoveredSession): Session {
 export function parseSessionExchanges(jsonlPath: string): Exchange[] {
   const lines = readLines(jsonlPath);
   const exchanges: Exchange[] = [];
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
     let data: any;
-    try { data = JSON.parse(line); } catch { continue; }
+    try { data = JSON.parse(lines[i]); } catch { continue; }
     const type = data.type;
     if (type !== 'user' && type !== 'assistant') continue;
     const text = extractMessageText(data);
     if (!text) continue;
     const ts = parseTimestamp(data.timestamp);
-    exchanges.push({ role: type as 'user' | 'assistant', text, timestamp: ts || undefined });
+    exchanges.push({ role: type as 'user' | 'assistant', text, timestamp: ts || undefined, lineIndex: i });
   }
   return exchanges;
 }

@@ -38,6 +38,9 @@ export class PreviewPanel {
           case 'fork':
             vscode.commands.executeCommand('claudeman.forkSession', { session: msg.session });
             break;
+          case 'forkFromExchange':
+            vscode.commands.executeCommand('claudeman.forkFromExchange', msg);
+            break;
           case 'loadMore':
             this.loadAllExchanges(msg.sessionId, msg.jsonlPath);
             break;
@@ -66,7 +69,7 @@ export class PreviewPanel {
     const nonce = getNonce();
 
     const exchangeHtml = exchanges.map((e, i) =>
-      `<div class="exchange">` +
+      `<div class="exchange" data-index="${i}" data-line="${e.lineIndex}" onclick="selectExchange(this, ${i}, ${e.lineIndex})">` +
       `<div class="role ${escapeHtml(e.role)}">${e.role === 'user' ? 'YOU' : 'CLAUDE'} [${i + 1}]</div>` +
       `<div class="text">${escapeHtml(e.text)}</div>` +
       `</div>`
@@ -104,19 +107,47 @@ export class PreviewPanel {
   <div class="separator"></div>
   <div id="exchanges">${exchangeHtml}</div>
   ${loadMoreHtml}
+  <div id="fork-bar" class="fork-bar" style="display:none;">
+    <span id="fork-label"></span>
+    <button onclick="forkFromHere()">Fork from here</button>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const sessionData = ${sessionJson};
     const jsonlPath = ${jsonlPathJson};
+    let selectedLineIndex = -1;
+    let selectedExchangeIndex = -1;
+    let selectedRole = '';
 
     function resume() { vscode.postMessage({ command: 'resume', session: sessionData }); }
     function fork() { vscode.postMessage({ command: 'fork', session: sessionData }); }
     function loadMore() { vscode.postMessage({ command: 'loadMore', sessionId: sessionData.sessionId, jsonlPath }); }
 
-    function escapeHtmlClient(text) {
-      const el = document.createElement('span');
-      el.textContent = text;
-      return el.innerHTML;
+    function selectExchange(el, index, lineIndex) {
+      document.querySelectorAll('.exchange').forEach(e => e.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedExchangeIndex = index;
+      selectedLineIndex = lineIndex;
+      selectedRole = el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant';
+      const bar = document.getElementById('fork-bar');
+      const label = document.getElementById('fork-label');
+      if (bar && label) {
+        label.textContent = 'Fork point: exchange ' + (index + 1);
+        bar.style.display = 'flex';
+      }
+    }
+
+    function forkFromHere() {
+      if (selectedLineIndex < 0) return;
+      vscode.postMessage({
+        command: 'forkFromExchange',
+        sessionId: sessionData.sessionId,
+        cwd: sessionData.cwd,
+        jsonlPath: jsonlPath,
+        lineIndex: selectedLineIndex,
+        role: selectedRole,
+        exchangeIndex: selectedExchangeIndex
+      });
     }
 
     window.addEventListener('message', (event) => {
@@ -128,6 +159,9 @@ export class PreviewPanel {
         msg.exchanges.forEach((e, i) => {
           const div = document.createElement('div');
           div.className = 'exchange';
+          div.dataset.index = String(i);
+          div.dataset.line = String(e.lineIndex);
+          div.onclick = function() { selectExchange(div, i, e.lineIndex); };
           const role = document.createElement('div');
           role.className = 'role ' + (e.role === 'user' ? 'user' : 'assistant');
           role.textContent = (e.role === 'user' ? 'YOU' : 'CLAUDE') + ' [' + (i + 1) + ']';

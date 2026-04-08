@@ -48,7 +48,58 @@ body {
   background: var(--vscode-button-secondaryBackground);
 }
 
-.exchange { margin-bottom: 16px; }
+.exchange {
+  margin-bottom: 16px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  padding-left: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.exchange:hover {
+  border-left-color: var(--vscode-focusBorder);
+}
+
+.exchange.selected {
+  border-left-color: var(--vscode-charts-yellow, #e2c08d);
+  background: var(--vscode-editor-selectionBackground);
+}
+
+.exchange.selected .role::after {
+  content: '  \u25C4 fork point';
+  font-weight: normal;
+  font-size: 0.8em;
+  color: var(--vscode-charts-yellow, #e2c08d);
+}
+
+.fork-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--vscode-editor-selectionBackground);
+  border-top: 1px solid var(--vscode-charts-yellow, #e2c08d);
+}
+
+.fork-bar span {
+  color: var(--vscode-charts-yellow, #e2c08d);
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.fork-bar button {
+  padding: 4px 12px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font-size: 0.85em;
+}
+
+.fork-bar button:hover { background: var(--vscode-button-hoverBackground); }
 
 .exchange .role {
   font-weight: 600;

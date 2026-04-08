@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as path from 'path';
 import { SessionStore } from './sessionStore';
 import { SessionTreeProvider } from './treeProvider';
 import { PreviewPanel } from './previewPanel';
@@ -55,11 +57,12 @@ export function registerCommands(
       if (!item?.session) return;
       const name = store.names.displayName(item.session.sessionId, item.session.name);
       const confirm = await vscode.window.showWarningMessage(
-        `Delete "${name}" from index?`, 'Delete', 'Cancel'
+        `Delete "${name}" and its conversation file?`, 'Delete', 'Cancel'
       );
       if (confirm === 'Delete') {
         store.deleteSession(item.session.sessionId);
-        vscode.window.showInformationMessage('Session removed from index');
+        treeProvider.refresh();
+        vscode.window.showInformationMessage('Session and file deleted');
       }
     }),
 
@@ -71,6 +74,11 @@ export function registerCommands(
     vscode.commands.registerCommand('claudeman.viewAll', () => treeProvider.setViewMode('all')),
     vscode.commands.registerCommand('claudeman.viewByProject', () => treeProvider.setViewMode('projects')),
     vscode.commands.registerCommand('claudeman.viewRecent', () => treeProvider.setViewMode('recent')),
+
+    vscode.commands.registerCommand('claudeman.forkFromExchange', (msg: any) => {
+      if (!msg?.jsonlPath || msg.lineIndex == null) return;
+      forkFromExchange(msg.sessionId, msg.cwd, msg.jsonlPath, msg.lineIndex, msg.role);
+    }),
   );
 }
 
@@ -108,6 +116,46 @@ async function resumeInNewWindow(sessionId: string, cwd: string): Promise<void> 
 /**
  * Resume in the integrated terminal with cd to the session's directory.
  */
+function forkFromExchange(sessionId: string, cwd: string, jsonlPath: string, lineIndex: number, role: string): void {
+  try {
+    const content = fs.readFileSync(jsonlPath, 'utf-8');
+    const lines = content.split('\n').filter(l => l.trim());
+
+    // If user message selected, include the following assistant response
+    let lastLine = lineIndex;
+    if (role === 'user' && lastLine + 1 < lines.length) {
+      try {
+        const next = JSON.parse(lines[lastLine + 1]);
+        if (next.type === 'assistant') lastLine = lastLine + 1;
+      } catch { /* skip */ }
+    }
+
+    if (lastLine >= lines.length) {
+      vscode.window.showErrorMessage('Exchange index out of range');
+      return;
+    }
+
+    // Generate new session ID and write truncated JSONL
+    const newId = crypto.randomUUID();
+    const forkedLines = lines.slice(0, lastLine + 1).map(line => {
+      try {
+        const data = JSON.parse(line);
+        data.sessionId = newId;
+        return JSON.stringify(data);
+      } catch { return line; }
+    });
+
+    const forkPath = path.join(path.dirname(jsonlPath), `${newId}.jsonl`);
+    fs.writeFileSync(forkPath, forkedLines.join('\n') + '\n');
+
+    const exNum = Math.floor((lineIndex + 1) / 2) + 1;
+    vscode.window.showInformationMessage(`Forked from exchange ${exNum} → new session ${newId.slice(0, 8)}`);
+    resumeInTerminal(newId, cwd, false);
+  } catch (e: any) {
+    vscode.window.showErrorMessage(`Fork failed: ${e.message}`);
+  }
+}
+
 function resumeInTerminal(sessionId: string, cwd: string, fork: boolean): void {
   const config = vscode.workspace.getConfiguration('claudeman');
   const claudeCmd = config.get<string>('claudeCommand') || 'claude';

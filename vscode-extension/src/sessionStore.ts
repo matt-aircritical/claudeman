@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { Session } from './types';
@@ -94,6 +95,10 @@ export class SessionStore {
   getSession(sessionId: string): Session | undefined { return this.sessions.get(sessionId); }
 
   deleteSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session?.jsonlPath) {
+      try { fs.unlinkSync(session.jsonlPath); } catch { /* file may already be gone */ }
+    }
     this.sessions.delete(sessionId);
     this._onDidChange.fire();
   }

@@ -25,6 +25,7 @@ export interface Exchange {
   role: 'user' | 'assistant';
   text: string;
   timestamp?: number;
+  lineIndex: number;
 }
 
 export type ViewMode = 'all' | 'projects' | 'recent';
