@@ -5,7 +5,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Position, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Tabs, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Padding, Paragraph, Tabs, Wrap},
     Frame,
 };
 
@@ -22,10 +22,18 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         ])
         .split(area);
 
+    app.search_area = chunks[0];
+    app.tabs_area = chunks[1];
+
     draw_search_bar(f, app, chunks[0]);
     draw_tabs(f, app, chunks[1]);
     draw_main(f, app, chunks[2]);
     draw_status_bar(f, app, chunks[3]);
+
+    // Context menu overlay
+    if app.context_menu.visible {
+        draw_context_menu(f, app);
+    }
 
     // Help overlay
     if app.show_help {
@@ -116,6 +124,9 @@ fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {
         .constraints([Constraint::Percentage(67), Constraint::Percentage(33)])
         .split(area);
 
+    app.list_area = h_chunks[0];
+    app.preview_area = h_chunks[1];
+
     draw_session_list(f, app, h_chunks[0]);
     draw_preview(f, app, h_chunks[1]);
 }
@@ -143,10 +154,11 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
             DisplayItem::Session(idx) => {
                 let session = &app.sessions[*idx];
                 let name = display_name(session, &app.name_store).to_string();
-                let date = format_date(session.last_activity);
+                let updated = format_date(session.last_activity);
+                let created = format_date(session.started_at);
                 let msgs = format!("{}msg", session.message_count);
 
-                let max_name = inner_width.saturating_sub(date.len() + msgs.len() + 4);
+                let max_name = inner_width.saturating_sub(updated.len() + msgs.len() + 4);
                 let name_display = if name.chars().count() > max_name {
                     let truncated: String = name.chars().take(max_name.saturating_sub(1).max(1)).collect();
                     format!("{truncated}…")
@@ -160,7 +172,7 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
                         Style::default().fg(Color::White),
                     ),
                     Span::raw("  "),
-                    Span::styled(date, Style::default().fg(Color::DarkGray)),
+                    Span::styled(updated, Style::default().fg(Color::DarkGray)),
                     Span::raw("  "),
                     Span::styled(msgs, Style::default().fg(Color::DarkGray)),
                 ]);
@@ -172,6 +184,14 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
                 };
                 let project_short = shorten_path(project, inner_width.saturating_sub(2));
 
+                let time_info = format!("created: {}  updated: {}", created, format_date(session.last_activity));
+                let max_time = inner_width.saturating_sub(4);
+                let time_display: String = if time_info.chars().count() > max_time {
+                    time_info.chars().take(max_time).collect()
+                } else {
+                    time_info
+                };
+
                 let line2 = Line::from(vec![
                     Span::styled(
                         format!("  {}", project_short),
@@ -179,7 +199,14 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
                     ),
                 ]);
 
-                ListItem::new(vec![line1, line2])
+                let line3 = Line::from(vec![
+                    Span::styled(
+                        format!("  {}", time_display),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ]);
+
+                ListItem::new(vec![line1, line2, line3, Line::raw("")])
             }
         })
         .collect();
@@ -200,6 +227,7 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::DarkGray))
+                .padding(Padding::new(0, 0, 1, 0))
                 .title(Span::styled(
                     title,
                     Style::default()
@@ -213,21 +241,21 @@ fn draw_session_list(f: &mut Frame, app: &mut App, area: Rect) {
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
         )
-        .highlight_symbol("▸ ");
+        .highlight_symbol("▸ ")
+        .scroll_padding(3);
 
-    let mut list_state = ListState::default();
     if !app.display_items.is_empty() {
-        list_state.select(Some(app.selected));
+        app.list_state.select(Some(app.selected));
     }
 
-    f.render_stateful_widget(list, area, &mut list_state);
+    f.render_stateful_widget(list, area, &mut app.list_state);
 }
 
-fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
-    let session = app.selected_session();
+fn draw_preview(f: &mut Frame, app: &mut App, area: Rect) {
+    let session = app.selected_session().cloned();
     let inner_width = area.width.saturating_sub(3) as usize;
 
-    let content = match session {
+    let content = match session.as_ref() {
         None => Paragraph::new(Line::from(Span::styled(
             "No session selected",
             Style::default().fg(Color::DarkGray),
@@ -300,23 +328,46 @@ fn draw_preview(f: &mut Frame, app: &App, area: Rect) {
                 )));
                 lines.push(Line::from(""));
 
+                app.preview_exchange_lines.clear();
                 for (i, exchange) in app.preview_exchanges.iter().enumerate() {
+                    let start_line = lines.len();
+                    let is_selected = i == app.preview_selected_exchange;
                     let (label, color) = if exchange.role == "user" {
                         (format!("YOU [{}]", i + 1), Color::Green)
                     } else {
                         (format!("CLAUDE [{}]", i + 1), Color::Blue)
                     };
 
-                    lines.push(Line::from(Span::styled(
-                        label,
-                        Style::default().fg(color).add_modifier(Modifier::BOLD),
-                    )));
+                    if is_selected {
+                        // Bright highlight bar for the selected exchange
+                        let marker = format!("▸ {label}  ◄ fork point");
+                        lines.push(Line::from(Span::styled(
+                            marker,
+                            Style::default()
+                                .fg(Color::Yellow)
+                                .bg(Color::Indexed(236))
+                                .add_modifier(Modifier::BOLD),
+                        )));
+                    } else {
+                        lines.push(Line::from(Span::styled(
+                            format!("  {label}"),
+                            Style::default().fg(color).add_modifier(Modifier::BOLD),
+                        )));
+                    }
 
                     let text = truncate_text(&exchange.text, 500);
                     for line in wrap_text(&text, inner_width) {
-                        lines.push(Line::from(Span::raw(line)));
+                        if is_selected {
+                            lines.push(Line::from(Span::styled(
+                                line,
+                                Style::default().bg(Color::Indexed(236)),
+                            )));
+                        } else {
+                            lines.push(Line::from(Span::raw(line)));
+                        }
                     }
                     lines.push(Line::from(""));
+                    app.preview_exchange_lines.push((start_line, lines.len()));
                 }
             } else {
                 // Compact mode: just first exchange
@@ -540,6 +591,50 @@ fn draw_help(f: &mut Frame, area: Rect) {
     );
 
     f.render_widget(help, popup_area);
+}
+
+fn draw_context_menu(f: &mut Frame, app: &mut App) {
+    let width = 19u16; // matches label width + borders
+    let height = app.context_menu.items.len() as u16 + 2; // +2 for borders
+    let frame_area = f.area();
+
+    // Position near click, but clamp to stay in frame
+    let x = app.context_menu.x.min(frame_area.width.saturating_sub(width));
+    let y = app.context_menu.y.min(frame_area.height.saturating_sub(height));
+    app.context_menu.render_x = x;
+    app.context_menu.render_y = y;
+    let area = Rect::new(x, y, width, height);
+
+    let selected = app.context_menu.selected;
+    let items: Vec<Line> = app
+        .context_menu
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, (label, _))| {
+            if i == selected {
+                Line::from(Span::styled(
+                    *label,
+                    Style::default().bg(Color::Cyan).fg(Color::Black),
+                ))
+            } else {
+                Line::from(Span::styled(
+                    *label,
+                    Style::default().fg(Color::White),
+                ))
+            }
+        })
+        .collect();
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .style(Style::default().bg(Color::Indexed(236)));
+
+    let paragraph = Paragraph::new(items).block(block);
+
+    f.render_widget(Clear, area);
+    f.render_widget(paragraph, area);
 }
 
 fn shorten_path(path: &str, max_len: usize) -> String {
