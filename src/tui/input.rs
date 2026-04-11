@@ -89,6 +89,7 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
                     session_id: session.session_id.clone(),
                     cwd: session.cwd.clone(),
                     fork: false,
+                    launch_fresh: false,
                 });
             }
         }
@@ -101,6 +102,7 @@ fn handle_normal(app: &mut App, key: KeyEvent) {
                     session_id: session.session_id.clone(),
                     cwd: session.cwd.clone(),
                     fork: true,
+                    launch_fresh: false,
                 });
             }
         }
@@ -258,6 +260,7 @@ fn execute_menu_action(app: &mut App, action: &str) {
                     session_id: session.session_id.clone(),
                     cwd: session.cwd.clone(),
                     fork: false,
+                    launch_fresh: false,
                 });
             }
         }
@@ -267,6 +270,7 @@ fn execute_menu_action(app: &mut App, action: &str) {
                     session_id: session.session_id.clone(),
                     cwd: session.cwd.clone(),
                     fork: true,
+                    launch_fresh: false,
                 });
             }
         }
@@ -362,6 +366,7 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent) {
                                     session_id: session.session_id.clone(),
                                     cwd: session.cwd.clone(),
                                     fork: false,
+                                    launch_fresh: false,
                                 });
                             }
                         }
@@ -395,6 +400,9 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent) {
             } else if in_rect(col, row, app.search_area) {
                 // Clicking search bar activates search mode
                 app.input_mode = InputMode::Search;
+            } else if in_rect(col, row, app.claude_button_area) {
+                // Launch fresh Claude with --dangerously-skip-permissions in cwd
+                launch_fresh_claude(app);
             } else if in_rect(col, row, app.tabs_area) {
                 // Click on a tab to switch view
                 let rel_x = col.saturating_sub(app.tabs_area.x) as usize;
@@ -473,6 +481,18 @@ pub fn handle_mouse(app: &mut App, mouse: MouseEvent) {
         }
         _ => {}
     }
+}
+
+fn launch_fresh_claude(app: &mut App) {
+    let cwd = std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    app.resume_action = Some(ResumeOptions {
+        session_id: String::new(),
+        cwd,
+        fork: false,
+        launch_fresh: true,
+    });
 }
 
 fn scroll_to_selected_exchange(app: &mut App) {

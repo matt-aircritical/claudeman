@@ -82,13 +82,21 @@ fn draw_search_bar(f: &mut Frame, app: &mut App, area: Rect) {
     }
 }
 
-fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
+fn draw_tabs(f: &mut Frame, app: &mut App, area: Rect) {
     let session_count = app.session_count();
     let search_count = if app.view_mode == ViewMode::SearchResults {
         session_count
     } else {
         app.filtered.len()
     };
+
+    // Reserve space on the right for the Claude button
+    let button_label = " [ ⚡ Claude ] ";
+    let button_width = button_label.chars().count() as u16;
+    let tabs_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(10), Constraint::Length(button_width)])
+        .split(area);
 
     let tab_titles = vec![
         Line::from(format!(" All ({}) ", app.sessions.len())),
@@ -114,7 +122,19 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
         )
         .divider("│");
 
-    f.render_widget(tabs, area);
+    f.render_widget(tabs, tabs_chunks[0]);
+
+    // Store the button area for click handling
+    app.claude_button_area = tabs_chunks[1];
+
+    let button = Paragraph::new(Line::from(Span::styled(
+        button_label,
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
+    )));
+    f.render_widget(button, tabs_chunks[1]);
 }
 
 fn draw_main(f: &mut Frame, app: &mut App, area: Rect) {

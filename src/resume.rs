@@ -8,15 +8,22 @@ pub struct ResumeOptions {
     pub session_id: String,
     pub cwd: String,
     pub fork: bool,
+    pub launch_fresh: bool,
 }
 
 pub fn build_resume_command(config: &Config, options: &ResumeOptions) -> Command {
     let mut cmd = Command::new(&config.claude_bin);
-    cmd.arg("--resume");
-    cmd.arg(&options.session_id);
 
-    if options.fork {
-        cmd.arg("--fork-session");
+    if !options.launch_fresh {
+        cmd.arg("--resume");
+        cmd.arg(&options.session_id);
+
+        if options.fork {
+            cmd.arg("--fork-session");
+        }
+    } else {
+        // Fresh launch with --dangerously-skip-permissions
+        cmd.arg("--dangerously-skip-permissions");
     }
 
     for arg in &config.claude_args {
@@ -48,6 +55,7 @@ mod tests {
             session_id: "abc-123".to_string(),
             cwd: "/tmp".to_string(),
             fork: false,
+            launch_fresh: false,
         };
         let cmd = build_resume_command(&config, &options);
         let args: Vec<_> = cmd.get_args().collect();
@@ -66,6 +74,7 @@ mod tests {
             session_id: "abc-123".to_string(),
             cwd: "/tmp".to_string(),
             fork: true,
+            launch_fresh: false,
         };
         let cmd = build_resume_command(&config, &options);
         let args: Vec<_> = cmd.get_args().collect();
@@ -79,6 +88,7 @@ mod tests {
             session_id: "abc-123".to_string(),
             cwd: "/nonexistent/path/that/does/not/exist".to_string(),
             fork: false,
+            launch_fresh: false,
         };
         let cmd = build_resume_command(&config, &options);
         assert!(cmd.get_current_dir().is_none());

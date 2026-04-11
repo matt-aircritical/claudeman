@@ -115,6 +115,7 @@ pub struct App {
     pub list_area: Rect,
     pub preview_area: Rect,
     pub tabs_area: Rect,
+    pub claude_button_area: Rect,
     pub list_state: ListState,
 }
 
@@ -157,6 +158,7 @@ impl App {
             list_area: Rect::default(),
             preview_area: Rect::default(),
             tabs_area: Rect::default(),
+            claude_button_area: Rect::default(),
             list_state: ListState::default(),
         };
         app.rebuild_display_items();
@@ -202,6 +204,7 @@ impl App {
             list_area: Rect::default(),
             preview_area: Rect::default(),
             tabs_area: Rect::default(),
+            claude_button_area: Rect::default(),
             list_state: ListState::default(),
         };
         app.run_search();
@@ -479,6 +482,7 @@ impl App {
             session_id: new_id,
             cwd: session.cwd.clone(),
             fork: false, // already forked manually, just resume the new file
+            launch_fresh: false,
         });
     }
 
