@@ -107,10 +107,18 @@ export class PreviewPanel {
   <div class="separator"></div>
   <div id="exchanges">${exchangeHtml}</div>
   ${loadMoreHtml}
+  <div id="fork-bar" class="fork-bar" style="display:none;">
+    <span id="fork-label"></span>
+    <button id="fork-here-btn">Fork from here</button>
+    <button id="fork-cancel-btn" class="secondary">Cancel</button>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const sessionData = ${sessionJson};
     const jsonlPath = ${jsonlPathJson};
+    let selectedLineIndex = -1;
+    let selectedRole = '';
+
     document.getElementById('resume-btn').addEventListener('click', () => {
       vscode.postMessage({ command: 'resume', session: sessionData });
     });
@@ -125,12 +133,28 @@ export class PreviewPanel {
       });
     }
 
-    // Double-click on exchange to fork from that point
-    document.getElementById('exchanges').addEventListener('dblclick', (e) => {
-      const el = e.target.closest('.exchange');
-      if (!el) return;
-      const lineIndex = parseInt(el.dataset.line, 10);
-      const role = el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant';
+    function selectExchange(el) {
+      document.querySelectorAll('.exchange').forEach(e => e.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedLineIndex = parseInt(el.dataset.line, 10);
+      selectedRole = el.dataset.role || (el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant');
+      const idx = parseInt(el.dataset.index, 10) + 1;
+      const bar = document.getElementById('fork-bar');
+      const label = document.getElementById('fork-label');
+      if (bar && label) {
+        label.textContent = 'Fork point: exchange ' + idx;
+        bar.style.display = 'flex';
+      }
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.exchange').forEach(e => e.classList.remove('selected'));
+      selectedLineIndex = -1;
+      const bar = document.getElementById('fork-bar');
+      if (bar) bar.style.display = 'none';
+    }
+
+    function forkAtLine(lineIndex, role) {
       vscode.postMessage({
         command: 'forkFromExchange',
         sessionId: sessionData.sessionId,
@@ -139,7 +163,27 @@ export class PreviewPanel {
         lineIndex: lineIndex,
         role: role
       });
+    }
+
+    document.getElementById('exchanges').addEventListener('click', (e) => {
+      const el = e.target.closest('.exchange');
+      if (!el) return;
+      selectExchange(el);
     });
+
+    // Double-click: immediate fork from that exchange
+    document.getElementById('exchanges').addEventListener('dblclick', (e) => {
+      const el = e.target.closest('.exchange');
+      if (!el) return;
+      const lineIndex = parseInt(el.dataset.line, 10);
+      const role = el.dataset.role || (el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant');
+      forkAtLine(lineIndex, role);
+    });
+
+    document.getElementById('fork-here-btn').addEventListener('click', () => {
+      if (selectedLineIndex >= 0) forkAtLine(selectedLineIndex, selectedRole);
+    });
+    document.getElementById('fork-cancel-btn').addEventListener('click', clearSelection);
 
     window.addEventListener('message', (event) => {
       const msg = event.data;

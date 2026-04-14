@@ -110,3 +110,39 @@ body {
   border-top: 1px solid var(--vscode-panel-border);
   margin: 16px 0;
 }
+
+.fork-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  background: var(--vscode-editor-selectionBackground);
+  border-top: 2px solid var(--vscode-charts-yellow, #e2c08d);
+}
+
+.fork-bar span {
+  flex: 1;
+  color: var(--vscode-charts-yellow, #e2c08d);
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.fork-bar button {
+  padding: 5px 14px;
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font-size: 0.85em;
+}
+
+.fork-bar button:hover { background: var(--vscode-button-hoverBackground); }
+
+.fork-bar button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
