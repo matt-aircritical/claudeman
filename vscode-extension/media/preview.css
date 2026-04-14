@@ -72,34 +72,6 @@ body {
   color: var(--vscode-charts-yellow, #e2c08d);
 }
 
-.fork-bar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--vscode-editor-selectionBackground);
-  border-top: 1px solid var(--vscode-charts-yellow, #e2c08d);
-}
-
-.fork-bar span {
-  color: var(--vscode-charts-yellow, #e2c08d);
-  font-weight: 600;
-  font-size: 0.9em;
-}
-
-.fork-bar button {
-  padding: 4px 12px;
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 2px;
-  cursor: pointer;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-  font-size: 0.85em;
-}
-
-.fork-bar button:hover { background: var(--vscode-button-hoverBackground); }
 
 .exchange .role {
   font-weight: 600;

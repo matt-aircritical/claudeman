@@ -69,17 +69,17 @@ export class PreviewPanel {
     const nonce = getNonce();
 
     const exchangeHtml = exchanges.map((e, i) =>
-      `<div class="exchange" data-index="${i}" data-line="${e.lineIndex}" onclick="selectExchange(this, ${i}, ${e.lineIndex})">` +
+      `<div class="exchange" data-index="${i}" data-line="${e.lineIndex}" data-role="${escapeHtml(e.role)}">` +
       `<div class="role ${escapeHtml(e.role)}">${e.role === 'user' ? 'YOU' : 'CLAUDE'} [${i + 1}]</div>` +
       `<div class="text">${escapeHtml(e.text)}</div>` +
       `</div>`
     ).join('');
 
     const loadMoreHtml = hasMore
-      ? `<div class="load-more"><button onclick="loadMore()">Load all ${totalCount} exchanges</button></div>`
+      ? `<div class="load-more"><button id="load-more-btn">Load all ${totalCount} exchanges</button></div>`
       : '';
 
-    const sessionJson = JSON.stringify({ sessionId: session.sessionId, cwd: session.cwd });
+    const sessionJson = JSON.stringify({ sessionId: session.sessionId, cwd: session.cwd, jsonlPath: session.jsonlPath });
     const jsonlPathJson = JSON.stringify(session.jsonlPath);
 
     return `<!DOCTYPE html>
@@ -100,55 +100,46 @@ export class PreviewPanel {
       ${session.model ? `<span>${escapeHtml(session.model)}</span>` : ''}
     </div>
     <div class="actions">
-      <button onclick="resume()">&#9654; Resume</button>
-      <button class="secondary" onclick="fork()">&#9095; Fork</button>
+      <button id="resume-btn">&#9654; Resume</button>
+      <button id="fork-btn" class="secondary">&#9095; Fork</button>
     </div>
   </div>
   <div class="separator"></div>
   <div id="exchanges">${exchangeHtml}</div>
   ${loadMoreHtml}
-  <div id="fork-bar" class="fork-bar" style="display:none;">
-    <span id="fork-label"></span>
-    <button onclick="forkFromHere()">Fork from here</button>
-  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const sessionData = ${sessionJson};
     const jsonlPath = ${jsonlPathJson};
-    let selectedLineIndex = -1;
-    let selectedExchangeIndex = -1;
-    let selectedRole = '';
+    document.getElementById('resume-btn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'resume', session: sessionData });
+    });
+    document.getElementById('fork-btn').addEventListener('click', () => {
+      vscode.postMessage({ command: 'fork', session: sessionData });
+    });
 
-    function resume() { vscode.postMessage({ command: 'resume', session: sessionData }); }
-    function fork() { vscode.postMessage({ command: 'fork', session: sessionData }); }
-    function loadMore() { vscode.postMessage({ command: 'loadMore', sessionId: sessionData.sessionId, jsonlPath }); }
-
-    function selectExchange(el, index, lineIndex) {
-      document.querySelectorAll('.exchange').forEach(e => e.classList.remove('selected'));
-      el.classList.add('selected');
-      selectedExchangeIndex = index;
-      selectedLineIndex = lineIndex;
-      selectedRole = el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant';
-      const bar = document.getElementById('fork-bar');
-      const label = document.getElementById('fork-label');
-      if (bar && label) {
-        label.textContent = 'Fork point: exchange ' + (index + 1);
-        bar.style.display = 'flex';
-      }
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener('click', () => {
+        vscode.postMessage({ command: 'loadMore', sessionId: sessionData.sessionId, jsonlPath });
+      });
     }
 
-    function forkFromHere() {
-      if (selectedLineIndex < 0) return;
+    // Double-click on exchange to fork from that point
+    document.getElementById('exchanges').addEventListener('dblclick', (e) => {
+      const el = e.target.closest('.exchange');
+      if (!el) return;
+      const lineIndex = parseInt(el.dataset.line, 10);
+      const role = el.querySelector('.role').textContent.startsWith('YOU') ? 'user' : 'assistant';
       vscode.postMessage({
         command: 'forkFromExchange',
         sessionId: sessionData.sessionId,
         cwd: sessionData.cwd,
         jsonlPath: jsonlPath,
-        lineIndex: selectedLineIndex,
-        role: selectedRole,
-        exchangeIndex: selectedExchangeIndex
+        lineIndex: lineIndex,
+        role: role
       });
-    }
+    });
 
     window.addEventListener('message', (event) => {
       const msg = event.data;
@@ -161,7 +152,7 @@ export class PreviewPanel {
           div.className = 'exchange';
           div.dataset.index = String(i);
           div.dataset.line = String(e.lineIndex);
-          div.onclick = function() { selectExchange(div, i, e.lineIndex); };
+          div.dataset.role = e.role;
           const role = document.createElement('div');
           role.className = 'role ' + (e.role === 'user' ? 'user' : 'assistant');
           role.textContent = (e.role === 'user' ? 'YOU' : 'CLAUDE') + ' [' + (i + 1) + ']';

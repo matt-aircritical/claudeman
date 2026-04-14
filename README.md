@@ -49,7 +49,7 @@ A sidebar extension that integrates session management into VSCode.
 Requires Rust toolchain.
 
 ```bash
-git clone https://github.com/matt-aircritical/claudeman.git
+git clone https://github.com/matt-adroited/claudeman.git
 cd claudeman
 cargo install --path .
 ```
@@ -63,7 +63,7 @@ cd claudeman/vscode-extension
 npm install
 npm run build
 ./node_modules/.bin/vsce package --allow-missing-repository
-code --install-extension claudeman-0.1.0.vsix
+code --install-extension claudeman-0.2.0.vsix
 ```
 
 Reload VSCode. The ClaudeMan icon appears in the activity bar.

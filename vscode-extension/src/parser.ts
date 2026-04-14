@@ -31,14 +31,14 @@ export function parseSessionMetadata(discovered: DiscoveredSession): Session {
       if (!version && data.version) version = data.version;
       if (!entrypoint && data.entrypoint) entrypoint = data.entrypoint;
       const text = extractMessageText(data);
-      if (text && !firstUserMessage) firstUserMessage = text.slice(0, 500);
+      if (text && !firstUserMessage) firstUserMessage = stripSystemTags(text).slice(0, 500);
     } else if (type === 'assistant') {
       messageCount++;
       const ts = parseTimestamp(data.timestamp);
       if (ts) lastActivity = ts;
       if (!model && data.model) model = data.model;
       const text = extractMessageText(data);
-      if (text && !firstAssistantMessage) firstAssistantMessage = text.slice(0, 500);
+      if (text && !firstAssistantMessage) firstAssistantMessage = stripSystemTags(text).slice(0, 500);
     }
   }
 
@@ -86,6 +86,14 @@ function parseTimestamp(ts: any): number | null {
   }
   if (typeof ts === 'number') return ts;
   return null;
+}
+
+/** Strip system-injected XML tags (e.g. <ide_opened_file>...</ide_opened_file>) and their content */
+export function stripSystemTags(text: string): string {
+  return text
+    .replace(/<[a-z][a-z_-]*>[\s\S]*?<\/[a-z][a-z_-]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function extractMessageText(data: any): string {

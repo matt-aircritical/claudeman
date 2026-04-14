@@ -3,77 +3,32 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SessionStore } from './sessionStore';
-import { SessionTreeProvider } from './treeProvider';
+import { SessionViewProvider } from './sessionViewProvider';
 import { PreviewPanel } from './previewPanel';
-import { SessionItem } from './treeItems';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   store: SessionStore,
-  treeProvider: SessionTreeProvider,
+  viewProvider: SessionViewProvider,
   previewPanel: PreviewPanel,
 ): void {
   context.subscriptions.push(
-    vscode.commands.registerCommand('claudeman.resumeSession', (item?: SessionItem | { session: { sessionId: string; cwd: string } }) => {
-      const session = resolveSession(item);
-      if (session) resumeInTerminal(session.sessionId, session.cwd, false);
-    }),
-
-    vscode.commands.registerCommand('claudeman.resumeInWindow', async (item?: SessionItem) => {
+    vscode.commands.registerCommand('claudeman.resumeSession', async (item?: any) => {
       const session = item?.session;
-      if (!session) { return; }
-      await resumeInNewWindow(session.sessionId, session.cwd);
+      if (session) await openInVscode(session.sessionId, session.cwd);
     }),
 
-    vscode.commands.registerCommand('claudeman.forkSession', (item?: SessionItem | { session: { sessionId: string; cwd: string } }) => {
-      const session = resolveSession(item);
-      if (session) resumeInTerminal(session.sessionId, session.cwd, true);
-    }),
-
-    vscode.commands.registerCommand('claudeman.renameSession', async (item?: SessionItem) => {
-      if (!item?.session) return;
-      const currentName = store.names.displayName(item.session.sessionId, item.session.name);
-      const newName = await vscode.window.showInputBox({ prompt: 'Enter new session name', value: currentName });
-      if (newName?.trim()) {
-        store.names.set(item.session.sessionId, newName.trim());
-        treeProvider.refresh();
-        vscode.window.showInformationMessage(`Renamed to: ${newName.trim()}`);
+    vscode.commands.registerCommand('claudeman.forkSession', async (item?: any) => {
+      const session = item?.session;
+      if (!session) return;
+      const jsonlPath = session.jsonlPath;
+      if (jsonlPath) {
+        const newId = forkFullSession(jsonlPath);
+        if (newId) await openInVscode(newId, session.cwd);
+      } else {
+        await openInVscode(session.sessionId, session.cwd);
       }
     }),
-
-    vscode.commands.registerCommand('claudeman.previewSession', (item?: SessionItem) => {
-      if (!item?.session) return;
-      const name = store.names.displayName(item.session.sessionId, item.session.name);
-      previewPanel.show(item.session, name);
-    }),
-
-    vscode.commands.registerCommand('claudeman.copySessionId', (item?: SessionItem) => {
-      if (!item?.session) return;
-      vscode.env.clipboard.writeText(item.session.sessionId);
-      vscode.window.showInformationMessage(`Copied: ${item.session.sessionId}`);
-    }),
-
-    vscode.commands.registerCommand('claudeman.deleteSession', async (item?: SessionItem) => {
-      if (!item?.session) return;
-      const name = store.names.displayName(item.session.sessionId, item.session.name);
-      const confirm = await vscode.window.showWarningMessage(
-        `Delete "${name}" and its conversation file?`, 'Delete', 'Cancel'
-      );
-      if (confirm === 'Delete') {
-        store.deleteSession(item.session.sessionId);
-        treeProvider.refresh();
-        vscode.window.showInformationMessage('Session and file deleted');
-      }
-    }),
-
-    vscode.commands.registerCommand('claudeman.refreshSessions', () => {
-      store.refresh();
-      vscode.window.showInformationMessage('Sessions refreshed');
-    }),
-
-    vscode.commands.registerCommand('claudeman.viewAll', () => treeProvider.setViewMode('all')),
-    vscode.commands.registerCommand('claudeman.viewByProject', () => treeProvider.setViewMode('projects')),
-    vscode.commands.registerCommand('claudeman.viewRecent', () => treeProvider.setViewMode('recent')),
 
     vscode.commands.registerCommand('claudeman.forkFromExchange', (msg: any) => {
       if (!msg?.jsonlPath || msg.lineIndex == null) return;
@@ -82,40 +37,50 @@ export function registerCommands(
   );
 }
 
-function resolveSession(item: any): { sessionId: string; cwd: string } | undefined {
-  if (!item) return undefined;
-  if (item instanceof SessionItem) return { sessionId: item.session.sessionId, cwd: item.session.cwd };
-  if (item?.session) return item.session;
-  return undefined;
-}
-
 /**
- * Resume in a new VSCode window opened in the session's directory.
- * Claude Code's session list will have the session available there.
+ * Open a new VSCode window in the session's directory.
+ * Claude Code's extension will show the session in its session list.
  */
-async function resumeInNewWindow(sessionId: string, cwd: string): Promise<void> {
+async function openInVscode(sessionId: string, cwd: string): Promise<void> {
   const targetDir = fs.existsSync(cwd) ? cwd : undefined;
   if (!targetDir) {
     vscode.window.showErrorMessage(`Session directory not found: ${cwd}`);
     return;
   }
 
-  // Use execFile (not exec) to safely open a new VSCode window
-  const { execFile } = require('child_process');
-  execFile('code', ['--new-window', targetDir], (err: any) => {
-    if (err) {
-      vscode.window.showErrorMessage(`Failed to open new window: ${err.message}`);
-    }
-  });
+  // Write resume request for the new window's claudeman to pick up
+  const resumeFile = path.join(require('os').homedir(), '.claude', '.claudeman-resume');
+  fs.writeFileSync(resumeFile, JSON.stringify({ sessionId }));
 
-  vscode.window.showInformationMessage(
-    `Opened ${targetDir} — find session ${sessionId.slice(0, 8)} in Claude Code's session list`
-  );
+  // Open the session's directory in a new window — Claude Code activates automatically
+  await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(targetDir), true);
 }
 
 /**
- * Resume in the integrated terminal with cd to the session's directory.
+ * Fork entire session: copy all JSONL lines with a new session ID.
  */
+function forkFullSession(jsonlPath: string): string | undefined {
+  try {
+    const content = fs.readFileSync(jsonlPath, 'utf-8');
+    const lines = content.split('\n').filter(l => l.trim());
+    const newId = crypto.randomUUID();
+    const forkedLines = lines.map(line => {
+      try {
+        const data = JSON.parse(line);
+        data.sessionId = newId;
+        return JSON.stringify(data);
+      } catch { return line; }
+    });
+    const forkPath = path.join(path.dirname(jsonlPath), `${newId}.jsonl`);
+    fs.writeFileSync(forkPath, forkedLines.join('\n') + '\n');
+    vscode.window.showInformationMessage(`Forked → new session ${newId.slice(0, 8)}`);
+    return newId;
+  } catch (e: any) {
+    vscode.window.showErrorMessage(`Fork failed: ${e.message}`);
+    return undefined;
+  }
+}
+
 function forkFromExchange(sessionId: string, cwd: string, jsonlPath: string, lineIndex: number, role: string): void {
   try {
     const content = fs.readFileSync(jsonlPath, 'utf-8');
@@ -150,31 +115,8 @@ function forkFromExchange(sessionId: string, cwd: string, jsonlPath: string, lin
 
     const exNum = Math.floor((lineIndex + 1) / 2) + 1;
     vscode.window.showInformationMessage(`Forked from exchange ${exNum} → new session ${newId.slice(0, 8)}`);
-    resumeInTerminal(newId, cwd, false);
+    openInVscode(newId, cwd);
   } catch (e: any) {
     vscode.window.showErrorMessage(`Fork failed: ${e.message}`);
-  }
-}
-
-function resumeInTerminal(sessionId: string, cwd: string, fork: boolean): void {
-  const config = vscode.workspace.getConfiguration('claudeman');
-  const claudeCmd = config.get<string>('claudeCommand') || 'claude';
-  const extraArgs = config.get<string[]>('claudeArgs') || [];
-
-  const args = ['--resume', sessionId];
-  if (fork) args.push('--fork-session');
-  args.push(...extraArgs);
-
-  const targetDir = fs.existsSync(cwd) ? cwd : undefined;
-
-  const terminal = vscode.window.createTerminal({
-    name: `Claude: ${sessionId.slice(0, 8)}`,
-    cwd: targetDir,
-  });
-  terminal.show();
-  if (targetDir) {
-    terminal.sendText(`cd ${targetDir} && ${claudeCmd} ${args.join(' ')}`);
-  } else {
-    terminal.sendText(`${claudeCmd} ${args.join(' ')}`);
   }
 }
