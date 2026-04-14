@@ -225,6 +225,31 @@ impl App {
             .count()
     }
 
+    /// Live filter: substring match on name, project dir, cwd, and first messages.
+    /// Matches the VSCode extension filter behavior.
+    pub fn run_live_filter(&mut self) {
+        if self.search_query.is_empty() {
+            self.filtered = (0..self.sessions.len()).collect();
+        } else {
+            let q = self.search_query.to_lowercase();
+            self.filtered = self
+                .sessions
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| {
+                    let name = crate::search::display_name(s, &self.name_store).to_lowercase();
+                    name.contains(&q)
+                        || s.first_user_message.to_lowercase().contains(&q)
+                        || s.first_assistant_message.to_lowercase().contains(&q)
+                        || s.cwd.to_lowercase().contains(&q)
+                        || s.project_dir.to_lowercase().contains(&q)
+                })
+                .map(|(i, _)| i)
+                .collect();
+        }
+        self.rebuild_display_items();
+    }
+
     pub fn run_search(&mut self) {
         if self.search_query.is_empty() {
             self.filtered = (0..self.sessions.len()).collect();

@@ -44,7 +44,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
 fn draw_search_bar(f: &mut Frame, app: &mut App, area: Rect) {
     let (title, content, border_color) = match app.input_mode {
         InputMode::Search => (
-            " Search (Enter to confirm, Esc to cancel) ",
+            " Filter (type to filter live, Enter to accept, Esc to clear) ",
             app.search_query.as_str(),
             Color::Yellow,
         ),
@@ -55,9 +55,9 @@ fn draw_search_bar(f: &mut Frame, app: &mut App, area: Rect) {
         ),
         InputMode::Normal => {
             let hint = if app.search_query.is_empty() {
-                " / search  n rename "
+                " / filter  n rename "
             } else {
-                " Esc to clear search "
+                " Esc to clear filter "
             };
             (hint, app.search_query.as_str(), Color::DarkGray)
         }

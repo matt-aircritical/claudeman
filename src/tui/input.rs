@@ -203,18 +203,22 @@ fn move_down(app: &mut App) {
 fn handle_search(app: &mut App, key: KeyEvent) {
     match key.code {
         KeyCode::Esc => {
+            // Cancel filter: clear query, restore full list, exit input mode
+            app.search_query.clear();
+            app.run_live_filter();
             app.input_mode = InputMode::Normal;
         }
         KeyCode::Enter => {
-            app.run_search();
-            app.view_mode = ViewMode::SearchResults;
+            // Exit input mode but keep the current live filter applied
             app.input_mode = InputMode::Normal;
         }
         KeyCode::Backspace => {
             app.search_query.pop();
+            app.run_live_filter();
         }
         KeyCode::Char(c) => {
             app.search_query.push(c);
+            app.run_live_filter();
         }
         _ => {}
     }
