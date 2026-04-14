@@ -2,9 +2,24 @@ use crate::scanner::DiscoveredSession;
 use crate::session::Session;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde_json::Value;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+
+/// Matches XML-like system-injected tags: <tag>...content...</tag>
+/// (non-greedy, tag names use lowercase letters/underscores/dashes).
+static SYSTEM_TAG_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?s)<[a-z][a-z_-]*>.*?</[a-z][a-z_-]*>").unwrap());
+static WHITESPACE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\s+").unwrap());
+
+/// Strip system-injected XML tags (and their content) from user/assistant text,
+/// then collapse whitespace. Mirrors the VSCode extension's stripSystemTags.
+pub fn strip_system_tags(text: &str) -> String {
+    let stripped = SYSTEM_TAG_RE.replace_all(text, "");
+    WHITESPACE_RE.replace_all(&stripped, " ").trim().to_string()
+}
 
 pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
     let file = File::open(&discovered.jsonl_path)?;
@@ -61,8 +76,9 @@ pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
 
                 let text = extract_user_text(&value);
                 if !text.is_empty() {
-                    if first_user_message.is_empty() {
-                        first_user_message = truncate(&text, 500);
+                    let clean = strip_system_tags(&text);
+                    if !clean.is_empty() && first_user_message.is_empty() {
+                        first_user_message = truncate(&clean, 500);
                     }
                     user_messages.push(text);
                 }
@@ -82,8 +98,9 @@ pub fn parse_session(discovered: &DiscoveredSession) -> Result<Session> {
 
                 let text = extract_assistant_text(&value);
                 if !text.is_empty() {
-                    if first_assistant_message.is_empty() {
-                        first_assistant_message = truncate(&text, 500);
+                    let clean = strip_system_tags(&text);
+                    if !clean.is_empty() && first_assistant_message.is_empty() {
+                        first_assistant_message = truncate(&clean, 500);
                     }
                     assistant_messages.push(text);
                 }
